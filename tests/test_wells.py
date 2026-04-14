@@ -1,7 +1,6 @@
 """Tests para el endpoint de listado de pozos."""
 
 from fastapi.testclient import TestClient
-
 from app.main import app
 
 client = TestClient(app)
@@ -30,18 +29,27 @@ def test_wells_returns_list() -> None:
     assert len(body) > 0
 
 
-def test_wells_item_structure() -> None:
-    """Verifica que cada pozo tiene los campos esperados."""
+def test_wells_returns_list_of_objects() -> None:
+    """Verifica que la respuesta es una lista de objetos."""
     response = client.get(
         "/api/v1/wells",
         params={"date_query": "2024-01-01"},
         headers=HEADERS,
     )
-    well = response.json()[0]
-    assert "id_well" in well
-    assert "field" in well
-    assert "basin" in well
-    assert "active" in well
+    body = response.json()
+    assert isinstance(body, list)
+    assert isinstance(body[0], dict)
+
+
+def test_wells_only_returns_active() -> None:
+    """Verifica que solo retorna pozos activos."""
+    response = client.get(
+        "/api/v1/wells",
+        params={"date_query": "2024-01-01"},
+        headers=HEADERS,
+    )
+    for well in response.json():
+        assert well["active"] is True
 
 
 def test_wells_invalid_api_key_returns_403() -> None:

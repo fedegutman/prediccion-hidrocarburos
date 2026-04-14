@@ -6,38 +6,23 @@ from typing import Dict, List
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
+from app.mock_data import MOCK_WELLS, MOCK_BASE_PRODUCTION, DAILY_DECLINE
+
+
 API_KEY = "abcdef12345"
 
 router = APIRouter()
 
-MOCK_BASE_PRODUCTION: Dict[str, float] = {
-    "POZO-001": 150.0,
-    "POZO-002": 210.5,
-    "POZO-003": 98.3,
-    "POZO-004": 175.0,
-    "POZO-005": 320.8,
-}
-
-DAILY_DECLINE: float = 0.5
-
 
 class ForecastPoint(BaseModel):
-    """Punto de pronostico para una fecha dada.
-
-    :param date: Fecha del pronostico (YYYY-MM-DD).
-    :param prod: Produccion esperada en ese dia.
-    """
+    """Punto de producción estimada para un día específico."""
 
     date: str
     prod: float
 
 
 class ForecastResponse(BaseModel):
-    """Respuesta del endpoint de pronostico.
-
-    :param id_well: Identificador del pozo.
-    :param data: Lista de puntos de pronostico diario.
-    """
+    """Pronóstico completo de producción para un pozo en un rango de fechas."""
 
     id_well: str
     data: List[ForecastPoint]
@@ -73,24 +58,35 @@ def _generate_forecast(id_well: str, date_start: date, date_end: date) -> List[F
     return points
 
 
-@router.get("/forecast", response_model=ForecastResponse)
+@router.get(
+    "/forecast",
+    response_model=ForecastResponse,
+    summary="Obtener pronóstico de producción",
+    description="""
+Retorna el pronóstico diario de producción para un pozo dado en un rango de fechas.
+
+**Parámetros:**
+- `id_well`: Identificador del pozo (ej: `POZO-001`)
+- `date_start`: Fecha de inicio en formato `YYYY-MM-DD`
+- `date_end`: Fecha de fin en formato `YYYY-MM-DD`
+
+**Errores posibles:**
+- `403` si la API key es inválida
+- `400` si `date_end` es anterior a `date_start`
+- `404` si el pozo no existe
+
+""",
+)
 def get_forecast(
     id_well: str,
     date_start: date,
     date_end: date,
     x_api_key: str = Header(default=""),
 ) -> ForecastResponse:
-    """Obtiene el pronostico de produccion de un pozo para un horizonte de tiempo.
-
-    :param id_well: Identificador del pozo.
-    :param date_start: Fecha de inicio del pronostico (YYYY-MM-DD).
-    :param date_end: Fecha de fin del pronostico (YYYY-MM-DD).
-    :param x_api_key: API key de autenticacion (header X-API-Key).
-    :return: Pronostico diario de produccion para el pozo.
-    :raises HTTPException: Si la API key es invalida (403).
-    :raises HTTPException: Si date_end es anterior a date_start (400).
-    """
     _validate_api_key(x_api_key)
+
+    if id_well not in [w["id_well"] for w in MOCK_WELLS]:
+        raise HTTPException(status_code=404, detail=f"El pozo {id_well} no existe.")
 
     if date_end < date_start:
         raise HTTPException(status_code=400, detail="date_end no puede ser anterior a date_start.")

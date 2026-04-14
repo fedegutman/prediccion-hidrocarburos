@@ -1,7 +1,6 @@
 """Tests para el endpoint de pronostico de produccion."""
 
 from fastapi.testclient import TestClient
-
 from app.main import app
 
 client = TestClient(app)
@@ -62,3 +61,13 @@ def test_forecast_date_end_before_start_returns_400() -> None:
         headers=HEADERS,
     )
     assert response.status_code == 400
+
+
+def test_forecast_well_not_found_returns_404() -> None:
+    """Verifica que un pozo inexistente retorna 404."""
+    response = client.get(
+        "/api/v1/forecast",
+        params={"id_well": "POZO-999", "date_start": "2024-01-01", "date_end": "2024-01-03"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 404
