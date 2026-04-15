@@ -476,7 +476,7 @@
       "id": 17,
       "type": "timeseries",
       "title": "Uso de Memoria del Host",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 22 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "options": {
         "tooltip": { "mode": "multi" },
@@ -505,6 +505,39 @@
           "expr": "(1 - (node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"})) * 100",
           "legendFormat": "Memoria %",
           "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "I/O de Disco del Host",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(node_disk_read_bytes_total{job=\"node-exporter\"}[5m]))",
+          "legendFormat": "Lectura",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(node_disk_written_bytes_total{job=\"node-exporter\"}[5m]))",
+          "legendFormat": "Escritura",
+          "refId": "B"
         }
       ]
     }
