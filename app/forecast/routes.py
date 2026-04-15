@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.mock_data import MOCK_WELLS, MOCK_BASE_PRODUCTION, DAILY_DECLINE
+from app.metrics.business import FORECAST_REQUESTS_BY_WELL, FORECAST_DATE_RANGE_DAYS
 
 
 API_KEY = "abcdef12345"
@@ -90,6 +91,9 @@ def get_forecast(
 
     if date_end < date_start:
         raise HTTPException(status_code=400, detail="date_end no puede ser anterior a date_start.")
+
+    FORECAST_REQUESTS_BY_WELL.labels(id_well=id_well).inc()
+    FORECAST_DATE_RANGE_DAYS.observe((date_end - date_start).days)
 
     data = _generate_forecast(id_well, date_start, date_end)
     return ForecastResponse(id_well=id_well, data=data)
