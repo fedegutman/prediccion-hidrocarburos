@@ -1,0 +1,19 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack-alertas
+    receivers:
+      - uid: slack-alertas-receiver
+        type: slack
+        disableResolveMessage: false
+        settings:
+          url: ${SLACK_WEBHOOK_URL}
+          title: |
+            {{ if eq .Status "firing" }}🔴 ALERTA: {{ .GroupLabels.alertname }}{{ else }}✅ RESUELTA: {{ .GroupLabels.alertname }}{{ end }}
+          text: |
+            {{ range .Alerts }}
+            *{{ .Annotations.summary }}*
+            {{ .Annotations.description }}
+            Severidad: {{ .Labels.severity }}
+            {{ end }}

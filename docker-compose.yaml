@@ -6,6 +6,16 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v2.52.0
     ports:
@@ -21,6 +31,7 @@ services:
       - --storage.tsdb.retention.time=15d
     depends_on:
       - api
+      - alertmanager
     restart: unless-stopped
 
   grafana:
@@ -31,6 +42,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro

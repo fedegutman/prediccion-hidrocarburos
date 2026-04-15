@@ -5,13 +5,13 @@
 
 ## Contexto
 
-La Adenda Técnica Fase 1 requiere un dashboard de monitoreo que registre métricas de desempeño de la API REST (latencia, disponibilidad, uso de recursos) y las exponga para su visualización en Grafana vía Prometheus.
+Se requiere un dashboard de monitoreo que registre métricas de desempeño de la API REST (latencia, disponibilidad, uso de recursos) y las exponga para su visualización en Grafana vía Prometheus.
 
 Para que Prometheus pueda recolectar métricas de la API, esta debe exponer un endpoint `/metrics` con datos en el formato que Prometheus entiende.
 
 ## Alternativas consideradas
 
-- **prometheus-fastapi-instrumentator**: wrapper de terceros que integra automáticamente `prometheus-client` con FastAPI. Requiere mínimo código pero introduce una dependencia no oficial mantenida por un desarrollador individual en la comunidad, lo que representa un riesgo de mantenimiento a largo plazo.
+- **prometheus-fastapi-instrumentator**: wrapper de terceros que integra automáticamente `prometheus-client` con FastAPI. Es una dependencia que no tiene el respaldo de la organización de Prometheus, la mantiene un desarrollador externo. Si ese desarrollador deja de actualizarla, la librería queda desactualizada o incompatible.
 
 - **prometheus-client (oficial)**: librería oficial de Prometheus para Python. Requiere registrar las métricas manualmente mediante un middleware de FastAPI, pero elimina la dependencia de terceros y ofrece mayor control sobre qué métricas se exponen y cómo.
 
