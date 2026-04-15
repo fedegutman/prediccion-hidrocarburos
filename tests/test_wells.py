@@ -60,3 +60,15 @@ def test_wells_invalid_api_key_returns_403() -> None:
         headers={"X-API-Key": "clave-incorrecta"},
     )
     assert response.status_code == 403
+
+
+def test_wells_returns_404_when_no_active_wells(monkeypatch) -> None:
+    """Verifica que retorna 404 si no hay pozos activos."""
+    import app.wells.routes as wells_routes
+    monkeypatch.setattr(wells_routes, "MOCK_WELLS", [{"id_well": "POZO-001", "active": False}])
+    response = client.get(
+        "/api/v1/wells",
+        params={"date_query": "2024-01-01"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 404
