@@ -1,0 +1,93 @@
+groups:
+  - name: oil-gas-api-disponibilidad
+    interval: 30s
+    rules:
+
+      - alert: ServicioCaido
+        expr: up{job="oil-gas-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "La API no responde"
+          description: >
+            El servicio oil-gas-api lleva más de 1 minuto sin responder.
+            Revisar con: docker compose logs api
+
+      - alert: ErrorRateAlto
+        expr: >
+          sum(rate(http_requests_total{status_code=~"5..",job="oil-gas-api"}[5m]))
+          /
+          sum(rate(http_requests_total{job="oil-gas-api"}[5m]))
+          > 0.01
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate de la API supera el 1%"
+          description: >
+            La tasa de errores HTTP 5xx es {{ $value | humanizePercentage }}
+            en los últimos 5 minutos (KPI: < 1%).
+
+      - alert: TasaAutenticacionFallida
+        expr: >
+          sum(rate(http_requests_total{status_code="403",job="oil-gas-api"}[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta tasa de requests no autorizados (403)"
+          description: >
+            Se están recibiendo más de 0.5 requests/seg con status 403
+            en los últimos 5 minutos. Posible uso de API keys inválidas.
+
+  - name: oil-gas-api-performance
+    interval: 30s
+    rules:
+
+      - alert: LatenciaForecastAlta
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="oil-gas-api"}[5m])) by (le)
+          ) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia p95 supera el KPI de 5 segundos"
+          description: >
+            El percentil 95 de latencia es {{ $value | humanizeDuration }},
+            superando el KPI de 5 segundos.
+
+  - name: sistema-recursos
+    interval: 60s
+    rules:
+
+      - alert: CPUAltaSostenida
+        expr: >
+          100 - (
+            avg by(instance) (
+              rate(node_cpu_seconds_total{mode="idle",job="node-exporter"}[5m])
+            ) * 100
+          ) > 80
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Uso de CPU del host supera 80%"
+          description: >
+            El uso de CPU del host es {{ $value | humanize }}%
+            de forma sostenida en los últimos 5 minutos.
+
+      - alert: MemoriaAltaSostenida
+        expr: >
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Uso de memoria del host supera 85%"
+          description: >
+            El uso de memoria del host es {{ $value | humanize }}%
+            de forma sostenida en los últimos 5 minutos.
