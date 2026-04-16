@@ -137,6 +137,9 @@ celerybeat.pid
 # Environments
 .env
 
+# macOS
+.DS_Store
+
 # Secrets en configuración de monitoring
 monitoring/alertmanager/alertmanager.yml
 .envrc

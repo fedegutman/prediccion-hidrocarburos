@@ -287,7 +287,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_request_duration_seconds_bucket{job=\"oil-gas-api\",le=\"5\"}[5m])) / sum(rate(http_request_duration_seconds_count{job=\"oil-gas-api\"}[5m])) * 100",
+          "expr": "sum(rate(http_request_duration_seconds_bucket{job=\"oil-gas-api\",le=\"5.0\"}[5m])) / sum(rate(http_request_duration_seconds_count{job=\"oil-gas-api\"}[5m])) * 100",
           "legendFormat": "% dentro SLA",
           "refId": "A"
         }
