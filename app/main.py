@@ -16,3 +16,4 @@ app.mount("/metrics", metrics_app)
 app.include_router(forecast_router, prefix="/api/v1")
 app.include_router(wells_router, prefix="/api/v1")
 
+
