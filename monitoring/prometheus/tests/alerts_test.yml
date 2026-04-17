@@ -1,0 +1,126 @@
+rule_files:
+  - ../rules/alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+
+  # ─── ServicioCaido ───────────────────────────────────────────────────────────
+
+  - name: ServicioCaido dispara cuando la API está caída por más de 1 minuto
+    interval: 1m
+    input_series:
+      - series: 'up{job="oil-gas-api", instance="api:8000"}'
+        values: "0 0 0"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ServicioCaido
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: oil-gas-api
+              instance: api:8000
+            exp_annotations:
+              summary: "La API no responde"
+              description: "El servicio oil-gas-api lleva más de 1 minuto sin responder. Revisar con: docker compose logs api\n"
+
+  - name: ServicioCaido no dispara cuando la API está activa
+    interval: 1m
+    input_series:
+      - series: 'up{job="oil-gas-api", instance="api:8000"}'
+        values: "1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ServicioCaido
+        exp_alerts: []
+
+  # ─── ErrorRateAlto ───────────────────────────────────────────────────────────
+
+  - name: ErrorRateAlto dispara cuando la tasa de errores 5xx supera el 1%
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="oil-gas-api", status_code="500", endpoint="/api/v1/forecast"}'
+        values: "0 60 120 180 240"
+      - series: 'http_requests_total{job="oil-gas-api", status_code="200", endpoint="/api/v1/forecast"}'
+        values: "0 10 20 30 40"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ErrorRateAlto
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Error rate de la API supera el 1%"
+              description: "La tasa de errores HTTP 5xx es 85.71% en los últimos 5 minutos (KPI: < 1%).\n"
+
+  - name: ErrorRateAlto no dispara cuando la tasa de errores es baja
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="oil-gas-api", status_code="500", endpoint="/api/v1/forecast"}'
+        values: "0 0 0 0 0"
+      - series: 'http_requests_total{job="oil-gas-api", status_code="200", endpoint="/api/v1/forecast"}'
+        values: "0 100 200 300 400"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ErrorRateAlto
+        exp_alerts: []
+
+  # ─── TasaAutenticacionFallida ────────────────────────────────────────────────
+
+  - name: TasaAutenticacionFallida dispara cuando hay muchos 403 por segundo
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="oil-gas-api", status_code="403", endpoint="/api/v1/wells"}'
+        values: "0 100 200 300 400"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: TasaAutenticacionFallida
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Alta tasa de requests no autorizados (403)"
+              description: "Se están recibiendo más de 0.5 requests/seg con status 403 en los últimos 5 minutos. Posible uso de API keys inválidas.\n"
+
+  - name: TasaAutenticacionFallida no dispara con pocos 403
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="oil-gas-api", status_code="403", endpoint="/api/v1/wells"}'
+        values: "0 1 2 3 4"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: TasaAutenticacionFallida
+        exp_alerts: []
+
+  # ─── LatenciaForecastAlta ────────────────────────────────────────────────────
+
+  - name: LatenciaForecastAlta dispara cuando el p95 supera 5 segundos
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="oil-gas-api", le="5.0"}'
+        values: "0 0 0 0 0"
+      - series: 'http_request_duration_seconds_bucket{job="oil-gas-api", le="7.5"}'
+        values: "0 100 200 300 400"
+      - series: 'http_request_duration_seconds_bucket{job="oil-gas-api", le="+Inf"}'
+        values: "0 100 200 300 400"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LatenciaForecastAlta
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Latencia p95 supera el KPI de 5 segundos"
+              description: "El percentil 95 de latencia es 7.375s, superando el KPI de 5 segundos.\n"
+
+  - name: LatenciaForecastAlta no dispara cuando la latencia está dentro del KPI
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="oil-gas-api", le="5.0"}'
+        values: "0 100 200 300 400"
+      - series: 'http_request_duration_seconds_bucket{job="oil-gas-api", le="+Inf"}'
+        values: "0 100 200 300 400"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LatenciaForecastAlta
+        exp_alerts: []
