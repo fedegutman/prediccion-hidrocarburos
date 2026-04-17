@@ -62,6 +62,16 @@ def test_wells_invalid_api_key_returns_403() -> None:
     assert response.status_code == 403
 
 
+def test_wells_invalid_date_format_returns_422() -> None:
+    """Verifica que un formato de fecha inválido retorna 422."""
+    response = client.get(
+        "/api/v1/wells",
+        params={"date_query": "not-a-date"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 422
+
+
 def test_wells_returns_404_when_no_active_wells(monkeypatch) -> None:
     """Verifica que retorna 404 si no hay pozos activos."""
     import app.wells.routes as wells_routes

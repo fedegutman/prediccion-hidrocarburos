@@ -71,3 +71,13 @@ def test_forecast_well_not_found_returns_404() -> None:
         headers=HEADERS,
     )
     assert response.status_code == 404
+
+
+def test_forecast_invalid_date_format_returns_422() -> None:
+    """Verifica que un formato de fecha inválido retorna 422."""
+    response = client.get(
+        "/api/v1/forecast",
+        params={"id_well": "POZO-001", "date_start": "not-a-date", "date_end": "2024-01-03"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 422

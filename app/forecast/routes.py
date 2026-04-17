@@ -1,11 +1,13 @@
 """Rutas para el pronostico de produccion de pozos."""
 
 from datetime import date, timedelta
-from typing import Dict, List
+from typing import List
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+from starlette.requests import Request
 
+from app.limiter import limiter
 from app.mock_data import MOCK_WELLS, MOCK_BASE_PRODUCTION, DAILY_DECLINE
 from app.metrics.business import FORECAST_REQUESTS_BY_WELL, FORECAST_DATE_RANGE_DAYS
 
@@ -75,10 +77,13 @@ Retorna el pronóstico diario de producción para un pozo dado en un rango de fe
 - `403` si la API key es inválida
 - `400` si `date_end` es anterior a `date_start`
 - `404` si el pozo no existe
+- `429` si se supera el límite de 60 requests por minuto
 
 """,
 )
+@limiter.limit("60/minute")
 def get_forecast(
+    request: Request,
     id_well: str,
     date_start: date,
     date_end: date,
