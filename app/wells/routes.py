@@ -1,16 +1,18 @@
 """Rutas para el listado de pozos disponibles."""
 
+from datetime import date
 from typing import List
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+from starlette.requests import Request
 
 from app.forecast.routes import _validate_api_key
+from app.limiter import limiter
 from app.mock_data import MOCK_WELLS
 
 
 router = APIRouter()
-
 
 
 class WellInfo(BaseModel):
@@ -34,9 +36,11 @@ Retorna el listado de pozos activos para una fecha dada.
 **Errores posibles:**
 - `403` si la API key es inválida
 - `404` si no hay pozos activos para la fecha dada
+- `429` si se supera el límite de 60 requests por minuto
 """,
 )
-def get_wells(date_query: str, x_api_key: str = Header(default="")) -> List[WellInfo]:
+@limiter.limit("60/minute")
+def get_wells(request: Request, date_query: date, x_api_key: str = Header(default="")) -> List[WellInfo]:
     _validate_api_key(x_api_key)
     active_wells = [w for w in MOCK_WELLS if w["active"]]
     if not active_wells:
