@@ -18,6 +18,7 @@ receivers:
         title: |
           {{ if eq .Status "firing" }}🔴 ALERTA: {{ .GroupLabels.alertname }}{{ else }}✅ RESUELTA: {{ .GroupLabels.alertname }}{{ end }}
         text: |
+          *Ambiente:* {{ .CommonLabels.env }}
           {{ range .Alerts }}
           *{{ .Annotations.summary }}*
           {{ .Annotations.description }}
