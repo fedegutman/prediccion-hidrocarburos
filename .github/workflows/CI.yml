@@ -139,6 +139,18 @@ jobs:
             docker compose restart alertmanager prometheus grafana
             docker image prune -f
 
+      - name: Debug - estado de containers y logs de Grafana
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_STAGING_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sleep 10
+            docker compose ps
+            echo "--- LOGS GRAFANA ---"
+            docker compose logs --tail=50 grafana
+
   deploy-prod:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
