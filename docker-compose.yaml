@@ -1,6 +1,6 @@
 services:
   api:
-    build: .
+    image: ghcr.io/fedegutman/predictiva-fase1:develop
     ports:
       - "8000:8000"
     environment:

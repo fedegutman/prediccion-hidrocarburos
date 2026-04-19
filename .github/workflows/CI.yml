@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +28,6 @@ jobs:
 
   prometheus-rules:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -42,12 +40,57 @@ jobs:
       - name: Test alert rules
         run: promtool test rules monitoring/prometheus/tests/alerts_test.yml
 
-  docker:
+  build-and-push:
+    needs: [test, prometheus-rules]
+    if: github.ref == 'refs/heads/develop' 
     runs-on: ubuntu-latest
-    needs: test
-
+    permissions:
+      contents: read
+      packages: write 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t predictiva-fase1:latest .
+      - name: Iniciar sesión en GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pasar el owner a minúsculas
+        run: echo "REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - name: Construir y subir imagen Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:develop
+
+  deploy-dev:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copiar docker-compose y config de monitoreo a EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_DEV_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.yaml,monitoring"
+          target: "~/"
+
+      - name: Desplegar en EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_DEV_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
