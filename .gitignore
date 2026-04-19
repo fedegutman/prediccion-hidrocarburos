@@ -135,13 +135,13 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 
 # macOS
 .DS_Store
 
 # Secrets en configuración de monitoring
 monitoring/alertmanager/alertmanager.yml
+monitoring/grafana/provisioning/alerting/contactpoints.yml
 .envrc
 .venv
 env/

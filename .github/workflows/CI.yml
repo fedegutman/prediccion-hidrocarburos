@@ -78,6 +78,7 @@ jobs:
         run: |
           export SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
           envsubst < monitoring/alertmanager/alertmanager.yml.template > monitoring/alertmanager/alertmanager.yml
+          envsubst < monitoring/grafana/provisioning/alerting/contactpoints.yml.template > monitoring/grafana/provisioning/alerting/contactpoints.yml
           sed -i 's/env: development/env: development/' monitoring/prometheus/prometheus.yml
           sed -i 's|predictiva-fase1:.*|predictiva-fase1:develop|' docker-compose.yaml
 
@@ -114,6 +115,7 @@ jobs:
         run: |
           export SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
           envsubst < monitoring/alertmanager/alertmanager.yml.template > monitoring/alertmanager/alertmanager.yml
+          envsubst < monitoring/grafana/provisioning/alerting/contactpoints.yml.template > monitoring/grafana/provisioning/alerting/contactpoints.yml
           sed -i 's/env: development/env: staging/' monitoring/prometheus/prometheus.yml
           sed -i 's|predictiva-fase1:.*|predictiva-fase1:staging|' docker-compose.yaml
 
@@ -162,6 +164,7 @@ jobs:
         run: |
           export SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
           envsubst < monitoring/alertmanager/alertmanager.yml.template > monitoring/alertmanager/alertmanager.yml
+          envsubst < monitoring/grafana/provisioning/alerting/contactpoints.yml.template > monitoring/grafana/provisioning/alerting/contactpoints.yml
           sed -i 's/env: development/env: production/' monitoring/prometheus/prometheus.yml
           sed -i 's|predictiva-fase1:.*|predictiva-fase1:main|' docker-compose.yaml
 
