@@ -74,6 +74,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generar alertmanager.yml desde template
+        run: |
+          export SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+          envsubst < monitoring/alertmanager/alertmanager.yml.template > monitoring/alertmanager/alertmanager.yml
+
       - name: Copiar docker-compose y config de monitoreo a EC2
         uses: appleboy/scp-action@v0.1.7
         with:
