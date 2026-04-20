@@ -94,7 +94,7 @@ jobs:
           source: "docker-compose.yaml,monitoring"
           target: "~/"
 
-      - name: Desplegar en EC2
+      - name: Desplegar en EC2 con health check y rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_DEV_IP }}
@@ -102,20 +102,20 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            IMAGE=$(docker compose config --images 2>/dev/null | grep predictiva | head -1 || echo "")
+            [ -n "$IMAGE" ] && docker tag "$IMAGE" "${IMAGE%:*}:rollback" 2>/dev/null || true
             docker compose pull
             docker compose up -d
             docker compose restart alertmanager prometheus grafana
-            docker image prune -f
-
-      - name: Health check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_DEV_IP }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
             sleep 20
-            curl -f http://localhost:8000/health || exit 1
+            if curl -f http://localhost:8000/health; then
+              docker image prune -f
+            else
+              echo "Health check failed - iniciando rollback"
+              [ -n "$IMAGE" ] && docker tag "${IMAGE%:*}:rollback" "$IMAGE" 2>/dev/null || true
+              docker compose up -d
+              exit 1
+            fi
 
   deploy-staging:
     needs: build-and-push
@@ -141,7 +141,7 @@ jobs:
           source: "docker-compose.yaml,monitoring"
           target: "~/"
 
-      - name: Desplegar en EC2
+      - name: Desplegar en EC2 con health check y rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_STAGING_IP }}
@@ -149,20 +149,20 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            IMAGE=$(docker compose config --images 2>/dev/null | grep predictiva | head -1 || echo "")
+            [ -n "$IMAGE" ] && docker tag "$IMAGE" "${IMAGE%:*}:rollback" 2>/dev/null || true
             docker compose pull
             docker compose up -d
             docker compose restart alertmanager prometheus grafana
-            docker image prune -f
-
-      - name: Health check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_STAGING_IP }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
             sleep 20
-            curl -f http://localhost:8000/health || exit 1
+            if curl -f http://localhost:8000/health; then
+              docker image prune -f
+            else
+              echo "Health check failed - iniciando rollback"
+              [ -n "$IMAGE" ] && docker tag "${IMAGE%:*}:rollback" "$IMAGE" 2>/dev/null || true
+              docker compose up -d
+              exit 1
+            fi
 
   deploy-prod:
     needs: build-and-push
@@ -188,7 +188,7 @@ jobs:
           source: "docker-compose.yaml,monitoring"
           target: "~/"
 
-      - name: Desplegar en EC2
+      - name: Desplegar en EC2 con health check y rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_PROD_IP }}
@@ -196,17 +196,17 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            IMAGE=$(docker compose config --images 2>/dev/null | grep predictiva | head -1 || echo "")
+            [ -n "$IMAGE" ] && docker tag "$IMAGE" "${IMAGE%:*}:rollback" 2>/dev/null || true
             docker compose pull
             docker compose up -d
             docker compose restart alertmanager prometheus grafana
-            docker image prune -f
-
-      - name: Health check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_PROD_IP }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
             sleep 20
-            curl -f http://localhost:8000/health || exit 1
+            if curl -f http://localhost:8000/health; then
+              docker image prune -f
+            else
+              echo "Health check failed - iniciando rollback"
+              [ -n "$IMAGE" ] && docker tag "${IMAGE%:*}:rollback" "$IMAGE" 2>/dev/null || true
+              docker compose up -d
+              exit 1
+            fi
