@@ -107,6 +107,16 @@ jobs:
             docker compose restart alertmanager prometheus grafana
             docker image prune -f
 
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_DEV_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sleep 20
+            curl -f http://localhost:8000/health || exit 1
+
   deploy-staging:
     needs: build-and-push
     if: github.ref == 'refs/heads/staging'
@@ -144,6 +154,15 @@ jobs:
             docker compose restart alertmanager prometheus grafana
             docker image prune -f
 
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_STAGING_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sleep 20
+            curl -f http://localhost:8000/health || exit 1
 
   deploy-prod:
     needs: build-and-push
@@ -181,3 +200,13 @@ jobs:
             docker compose up -d
             docker compose restart alertmanager prometheus grafana
             docker image prune -f
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_PROD_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sleep 20
+            curl -f http://localhost:8000/health || exit 1
