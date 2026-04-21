@@ -43,10 +43,12 @@ jobs:
       - name: Test alert rules
         run: promtool test rules monitoring/prometheus/tests/alerts_test.yml
 
-  build:
+  build-and-scan:
     needs: [test, prometheus-rules]
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -57,20 +59,24 @@ jobs:
         run: |
           docker build -t ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }} .
 
-  security-scan:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Pasar el owner a minúsculas
-        run: echo "REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
-
-      - name: Rebuild imagen para escanear
-        run: |
-          docker build -t ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }} .
-
       - name: Escanear imagen con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }}
+          format: markdown
+          output: Reports/report.md
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+      - name: Commitear reporte
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add Reports/report.md
+          git commit -m "chore: actualizar reporte de vulnerabilidades" || true
+          git push
+
+      - name: Verificar vulnerabilidades criticas
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }}
@@ -79,7 +85,7 @@ jobs:
           severity: CRITICAL,HIGH
 
   push:
-    needs: security-scan
+    needs: build-and-scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
