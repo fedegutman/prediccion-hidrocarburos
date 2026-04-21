@@ -43,9 +43,43 @@ jobs:
       - name: Test alert rules
         run: promtool test rules monitoring/prometheus/tests/alerts_test.yml
 
-  build-and-push:
+  build:
     needs: [test, prometheus-rules]
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pasar el owner a minúsculas
+        run: echo "REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - name: Buildear imagen Docker
+        run: |
+          docker build -t ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }} .
+
+  security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pasar el owner a minúsculas
+        run: echo "REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - name: Rebuild imagen para escanear
+        run: |
+          docker build -t ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }} .
+
+      - name: Escanear imagen con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+
+  push:
+    needs: security-scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,7 +105,7 @@ jobs:
           tags: ghcr.io/${{ env.REPO_OWNER }}/predictiva-fase1:${{ github.ref_name }}
 
   deploy-dev:
-    needs: build-and-push
+    needs: push
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
@@ -118,7 +152,7 @@ jobs:
             fi
 
   deploy-staging:
-    needs: build-and-push
+    needs: push
     if: github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     steps:
@@ -165,7 +199,7 @@ jobs:
             fi
 
   deploy-prod:
-    needs: build-and-push
+    needs: push
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
