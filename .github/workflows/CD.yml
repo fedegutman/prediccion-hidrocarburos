@@ -47,7 +47,7 @@ jobs:
               \"sudo docker pull $IMAGE_URI\",
               \"sudo docker stop api || true\",
               \"sudo docker rm api || true\",
-              \"sudo docker run -d --name api -p 8000:8000 $IMAGE_URI\"
+              \"sudo docker run -d --name api --restart always -p 8000:8000 $IMAGE_URI\"
             ]}" \
             --timeout-seconds 120 \
             --query "Command.CommandId" \
@@ -118,7 +118,7 @@ jobs:
               \"sudo docker pull $IMAGE_URI\",
               \"sudo docker stop api || true\",
               \"sudo docker rm api || true\",
-              \"sudo docker run -d --name api -p 8000:8000 $IMAGE_URI\"
+              \"sudo docker run -d --name api --restart always -p 8000:8000 $IMAGE_URI\"
             ]}" \
             --timeout-seconds 120 \
             --query "Command.CommandId" \
@@ -189,7 +189,7 @@ jobs:
               \"sudo docker pull $IMAGE_URI\",
               \"sudo docker stop api || true\",
               \"sudo docker rm api || true\",
-              \"sudo docker run -d --name api -p 8000:8000 $IMAGE_URI\"
+              \"sudo docker run -d --name api --restart always -p 8000:8000 $IMAGE_URI\"
             ]}" \
             --timeout-seconds 120 \
             --query "Command.CommandId" \
