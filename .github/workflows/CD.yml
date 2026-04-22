@@ -1,0 +1,229 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [develop, staging, main]
+    types: [completed]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REPOSITORY: api
+
+jobs:
+  deploy-develop:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy en EC2 via SSM
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:develop"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region ${{ env.AWS_REGION }} \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:Name,Values=tp-development" \
+            --parameters "{\"commands\":[
+              \"sudo yum install docker -y || sudo amazon-linux-extras install docker -y\",
+              \"sudo systemctl enable docker\",
+              \"sudo systemctl start docker\",
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"sudo docker pull $IMAGE_URI\",
+              \"sudo docker stop api || true\",
+              \"sudo docker rm api || true\",
+              \"sudo docker run -d --name api -p 8000:8000 $IMAGE_URI\"
+            ]}" \
+            --timeout-seconds 120 \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command ID: $COMMAND_ID"
+          sleep 5
+
+          INSTANCE_ID=$(aws ssm list-command-invocations \
+            --command-id "$COMMAND_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query "CommandInvocations[0].InstanceId" \
+            --output text)
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }}
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Status" \
+            --output text)
+
+          echo "Deployment status: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query "StandardErrorContent" \
+              --output text
+            exit 1
+          fi
+
+  deploy-staging:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'staging'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy en EC2 via SSM
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:staging"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region ${{ env.AWS_REGION }} \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:Name,Values=tp-staging" \
+            --parameters "{\"commands\":[
+              \"sudo yum install docker -y || sudo amazon-linux-extras install docker -y\",
+              \"sudo systemctl enable docker\",
+              \"sudo systemctl start docker\",
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"sudo docker pull $IMAGE_URI\",
+              \"sudo docker stop api || true\",
+              \"sudo docker rm api || true\",
+              \"sudo docker run -d --name api -p 8000:8000 $IMAGE_URI\"
+            ]}" \
+            --timeout-seconds 120 \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command ID: $COMMAND_ID"
+          sleep 5
+
+          INSTANCE_ID=$(aws ssm list-command-invocations \
+            --command-id "$COMMAND_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query "CommandInvocations[0].InstanceId" \
+            --output text)
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }}
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Status" \
+            --output text)
+
+          echo "Deployment status: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query "StandardErrorContent" \
+              --output text
+            exit 1
+          fi
+
+  deploy-prod:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy en EC2 via SSM
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:main"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region ${{ env.AWS_REGION }} \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:Name,Values=tp-prod" \
+            --parameters "{\"commands\":[
+              \"sudo yum install docker -y || sudo amazon-linux-extras install docker -y\",
+              \"sudo systemctl enable docker\",
+              \"sudo systemctl start docker\",
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"sudo docker pull $IMAGE_URI\",
+              \"sudo docker stop api || true\",
+              \"sudo docker rm api || true\",
+              \"sudo docker run -d --name api -p 8000:8000 $IMAGE_URI\"
+            ]}" \
+            --timeout-seconds 120 \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command ID: $COMMAND_ID"
+          sleep 5
+
+          INSTANCE_ID=$(aws ssm list-command-invocations \
+            --command-id "$COMMAND_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query "CommandInvocations[0].InstanceId" \
+            --output text)
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }}
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Status" \
+            --output text)
+
+          echo "Deployment status: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query "StandardErrorContent" \
+              --output text
+            exit 1
+          fi
