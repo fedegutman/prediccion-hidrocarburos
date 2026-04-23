@@ -1,6 +1,6 @@
 services:
   api:
-    image: 900840136318.dkr.ecr.us-east-2.amazonaws.com/api:develop
+    image: ${API_IMAGE}
     ports:
       - "8000:8000"
     environment:
