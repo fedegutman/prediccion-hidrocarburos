@@ -33,23 +33,23 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:develop"
-
           COMMAND_ID=$(aws ssm send-command \
             --region ${{ env.AWS_REGION }} \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:Name,Values=tp-development" \
             --parameters "{\"commands\":[
               \"sudo yum install docker -y || sudo amazon-linux-extras install docker -y\",
+              \"sudo yum install git -y\",
               \"sudo systemctl enable docker\",
               \"sudo systemctl start docker\",
+              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
+              \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"sudo docker pull $IMAGE_URI\",
-              \"sudo docker stop api || true\",
-              \"sudo docker rm api || true\",
-              \"sudo docker run -d --name api --restart always -p 8000:8000 $IMAGE_URI\"
+              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null || git -C /app pull\",
+              \"cd /app && sudo docker-compose pull\",
+              \"cd /app && sudo docker-compose up -d\"
             ]}" \
-            --timeout-seconds 120 \
+            --timeout-seconds 180 \
             --query "Command.CommandId" \
             --output text)
 
@@ -104,23 +104,23 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:staging"
-
           COMMAND_ID=$(aws ssm send-command \
             --region ${{ env.AWS_REGION }} \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:Name,Values=tp-staging" \
             --parameters "{\"commands\":[
               \"sudo yum install docker -y || sudo amazon-linux-extras install docker -y\",
+              \"sudo yum install git -y\",
               \"sudo systemctl enable docker\",
               \"sudo systemctl start docker\",
+              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
+              \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"sudo docker pull $IMAGE_URI\",
-              \"sudo docker stop api || true\",
-              \"sudo docker rm api || true\",
-              \"sudo docker run -d --name api --restart always -p 8000:8000 $IMAGE_URI\"
+              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null || git -C /app pull\",
+              \"cd /app && sudo docker-compose pull\",
+              \"cd /app && sudo docker-compose up -d\"
             ]}" \
-            --timeout-seconds 120 \
+            --timeout-seconds 180 \
             --query "Command.CommandId" \
             --output text)
 
@@ -175,23 +175,23 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:main"
-
           COMMAND_ID=$(aws ssm send-command \
             --region ${{ env.AWS_REGION }} \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:Name,Values=tp-prod" \
             --parameters "{\"commands\":[
               \"sudo yum install docker -y || sudo amazon-linux-extras install docker -y\",
+              \"sudo yum install git -y\",
               \"sudo systemctl enable docker\",
               \"sudo systemctl start docker\",
+              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
+              \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"sudo docker pull $IMAGE_URI\",
-              \"sudo docker stop api || true\",
-              \"sudo docker rm api || true\",
-              \"sudo docker run -d --name api --restart always -p 8000:8000 $IMAGE_URI\"
+              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null || git -C /app pull\",
+              \"cd /app && sudo docker-compose pull\",
+              \"cd /app && sudo docker-compose up -d\"
             ]}" \
-            --timeout-seconds 120 \
+            --timeout-seconds 180 \
             --query "Command.CommandId" \
             --output text)
 
