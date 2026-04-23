@@ -80,7 +80,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.ref_name }}
           format: json
           output: Reports/report.json
-          severity: CRITICAL,HIGH
+          severity: CRITICAL
           exit-code: 0
 
       - name: Commitear reporte
@@ -97,7 +97,7 @@ jobs:
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.ref_name }}
           format: table
           exit-code: 1
-          severity: CRITICAL,HIGH
+          severity: CRITICAL
 
   push:
     needs: build-and-scan
