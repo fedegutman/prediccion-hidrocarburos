@@ -32,7 +32,10 @@ jobs:
       - name: Deploy en EC2 via SSM
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:develop"
+
           COMMAND_ID=$(aws ssm send-command \
             --region ${{ env.AWS_REGION }} \
             --document-name "AWS-RunShellScript" \
@@ -45,7 +48,10 @@ jobs:
               \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
               \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null || git -C /app pull\",
+              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null; git -C /app fetch --all; git -C /app checkout develop; git -C /app pull origin develop\",
+              \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
+              \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
               \"cd /app && sudo docker-compose pull\",
               \"cd /app && sudo docker-compose up -d\"
             ]}" \
@@ -103,7 +109,10 @@ jobs:
       - name: Deploy en EC2 via SSM
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:staging"
+
           COMMAND_ID=$(aws ssm send-command \
             --region ${{ env.AWS_REGION }} \
             --document-name "AWS-RunShellScript" \
@@ -116,7 +125,10 @@ jobs:
               \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
               \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null || git -C /app pull\",
+              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null; git -C /app fetch --all; git -C /app checkout staging; git -C /app pull origin staging\",
+              \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
+              \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
               \"cd /app && sudo docker-compose pull\",
               \"cd /app && sudo docker-compose up -d\"
             ]}" \
@@ -174,7 +186,10 @@ jobs:
       - name: Deploy en EC2 via SSM
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:main"
+
           COMMAND_ID=$(aws ssm send-command \
             --region ${{ env.AWS_REGION }} \
             --document-name "AWS-RunShellScript" \
@@ -187,7 +202,10 @@ jobs:
               \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
               \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null || git -C /app pull\",
+              \"git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null; git -C /app fetch --all; git -C /app checkout main; git -C /app pull origin main\",
+              \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
+              \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
               \"cd /app && sudo docker-compose pull\",
               \"cd /app && sudo docker-compose up -d\"
             ]}" \
