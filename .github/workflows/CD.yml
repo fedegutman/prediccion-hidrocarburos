@@ -33,6 +33,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:develop"
 
@@ -48,7 +49,7 @@ jobs:
               \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
               \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"sudo git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null; sudo git -C /app fetch --all; sudo git -C /app checkout develop; sudo git -C /app pull origin develop\",
+              \"sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app 2>/dev/null; sudo git -C /app fetch --all; sudo git -C /app checkout develop; sudo git -C /app pull origin develop\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
               \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
@@ -110,6 +111,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:staging"
 
@@ -125,7 +127,7 @@ jobs:
               \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
               \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"sudo git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null; sudo git -C /app fetch --all; sudo git -C /app checkout staging; sudo git -C /app pull origin staging\",
+              \"sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app 2>/dev/null; sudo git -C /app fetch --all; sudo git -C /app checkout staging; sudo git -C /app pull origin staging\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
               \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
@@ -187,6 +189,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:main"
 
@@ -202,7 +205,7 @@ jobs:
               \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
               \"sudo chmod +x /usr/local/bin/docker-compose\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"sudo git clone https://github.com/fedegutman/tp-software.git /app 2>/dev/null; sudo git -C /app fetch --all; sudo git -C /app checkout main; sudo git -C /app pull origin main\",
+              \"sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app 2>/dev/null; sudo git -C /app fetch --all; sudo git -C /app checkout main; sudo git -C /app pull origin main\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
               \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
