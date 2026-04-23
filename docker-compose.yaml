@@ -1,10 +1,11 @@
 services:
   api:
-    image: ghcr.io/fedegutman/predictiva-fase1:develop
+    image: 900840136318.dkr.ecr.us-east-2.amazonaws.com/api:develop
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+    restart: unless-stopped
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
