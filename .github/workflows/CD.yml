@@ -52,7 +52,7 @@ jobs:
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout develop\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
-              \"sudo sed 's|\\\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
+              \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
               \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
               \"cd /app && sudo docker-compose pull\",
               \"cd /app && sudo docker-compose up -d\"
@@ -131,7 +131,7 @@ jobs:
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout staging\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
-              \"sudo sed 's|\\\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
+              \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
               \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
               \"cd /app && sudo docker-compose pull\",
               \"cd /app && sudo docker-compose up -d\"
@@ -210,7 +210,7 @@ jobs:
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout main\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
-              \"sudo sed 's|\\\${SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
+              \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
               \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
               \"cd /app && sudo docker-compose pull\",
               \"cd /app && sudo docker-compose up -d\"
