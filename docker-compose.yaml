@@ -1,10 +1,11 @@
 services:
   api:
-    image: ghcr.io/fedegutman/predictiva-fase1:develop
+    image: ${API_IMAGE}
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+    restart: unless-stopped
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
