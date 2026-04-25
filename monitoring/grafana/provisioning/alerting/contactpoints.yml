@@ -9,6 +9,7 @@ contactPoints:
         disableResolveMessage: false
         settings:
           url: ${SLACK_WEBHOOK_URL}
+          recipient: "#monitoring-alerts"
           title: |
             {{ if eq .Status "firing" }}🔴 ALERTA: {{ .GroupLabels.alertname }}{{ else }}✅ RESUELTA: {{ .GroupLabels.alertname }}{{ end }}
           text: |
