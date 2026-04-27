@@ -1,4 +1,4 @@
-# ADR-NNN: Plataforma de cómputo: Amazon EC2
+# ADR-002: Plataforma de cómputo: Amazon EC2
 
 **Fecha**: 2026-04-19
 **Estado**: Aceptado

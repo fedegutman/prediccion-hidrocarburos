@@ -1,4 +1,4 @@
-# ADR-NNN: Escaneo de vulnerabilidades en imágenes Docker
+# ADR-007: Escaneo de vulnerabilidades en imágenes Docker
 
 **Fecha**: 2026-04-21
 **Estado**: Aceptado
