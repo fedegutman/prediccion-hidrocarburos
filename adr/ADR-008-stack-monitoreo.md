@@ -1,4 +1,4 @@
-# ADR-NNN: Stack de monitoreo: Prometheus + Grafana
+# ADR-008: Stack de monitoreo: Prometheus + Grafana
 
 **Fecha**: 2026-04-14
 **Estado**: Aceptado

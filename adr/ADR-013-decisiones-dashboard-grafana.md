@@ -1,4 +1,4 @@
-# ADR-NNN: Decisiones de diseño del dashboard de Grafana
+# ADR-013: Decisiones de diseño del dashboard de Grafana
 
 **Fecha**: 2026-04-16
 **Estado**: Aceptado

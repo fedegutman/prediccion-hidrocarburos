@@ -1,4 +1,4 @@
-# ADR-NNN: Deploy remoto a EC2 via AWS SSM
+# ADR-005: Deploy remoto a EC2 via AWS SSM
 
 **Fecha**: 2026-04-23
 **Estado**: Aceptado

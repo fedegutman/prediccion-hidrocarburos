@@ -1,4 +1,4 @@
-# ADR-NNN: Registry de imágenes Docker: Amazon ECR
+# ADR-003: Registry de imágenes Docker: Amazon ECR
  
 **Fecha**: 2026-04-19
 **Estado**: Aceptado

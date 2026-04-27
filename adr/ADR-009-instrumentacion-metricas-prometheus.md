@@ -1,4 +1,4 @@
-# ADR-NNN: Instrumentación de métricas con prometheus-client
+# ADR-009: Instrumentación de métricas con prometheus-client
 
 **Fecha**: 2026-04-14
 **Estado**: Aceptado

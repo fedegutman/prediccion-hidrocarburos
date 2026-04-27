@@ -171,15 +171,16 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 
 | # | Decisión |
 |---|----------|
-| ADR-NNN | Plataforma de cómputo: Amazon EC2 |
-| ADR-NNN | Registry de imágenes Docker: Amazon ECR |
-| ADR-NNN | Autenticación de GitHub Actions con AWS via OIDC |
-| ADR-NNN | Deploy remoto a EC2 via AWS SSM |
-| ADR-NNN | Estrategia de despliegue: Rolling Update con Docker Compose |
-| ADR-NNN | Escaneo de vulnerabilidades en imágenes Docker (Trivy) |
-| ADR-NNN | Stack de monitoreo: Prometheus + Grafana |
-| ADR-NNN | Instrumentación de métricas con prometheus-client |
-| ADR-NNN | Routing de alertas con Prometheus Alertmanager |
-| ADR-NNN | Canal de notificaciones: Slack |
-| ADR-NNN | Testing de reglas de alerta con promtool |
-| ADR-NNN | Decisiones de diseño del dashboard de Grafana |
+| ADR-001 | API REST mock con FastAPI y OpenAPI |
+| ADR-002 | Plataforma de cómputo: Amazon EC2 |
+| ADR-003 | Registry de imágenes Docker: Amazon ECR |
+| ADR-004 | Autenticación de GitHub Actions con AWS via OIDC |
+| ADR-005 | Deploy remoto a EC2 via AWS SSM |
+| ADR-006 | Estrategia de despliegue: reemplazo controlado con health check y rollback |
+| ADR-007 | Escaneo de vulnerabilidades en imágenes Docker (Trivy) |
+| ADR-008 | Stack de monitoreo: Prometheus + Grafana |
+| ADR-009 | Instrumentación de métricas con prometheus-client |
+| ADR-010 | Routing de alertas con Prometheus Alertmanager |
+| ADR-011 | Canal de notificaciones: Slack |
+| ADR-012 | Testing de reglas de alerta con promtool |
+| ADR-013 | Decisiones de diseño del dashboard de Grafana |

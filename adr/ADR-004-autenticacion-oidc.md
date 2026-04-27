@@ -1,4 +1,4 @@
-# ADR-NNN: Autenticación de GitHub Actions con AWS via OIDC
+# ADR-004: Autenticación de GitHub Actions con AWS via OIDC
 
 **Fecha**: 2026-04-23
 **Estado**: Aceptado
