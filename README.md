@@ -65,18 +65,19 @@ Response 200: { "status": "ok" }
 
 ## CI/CD
 
-Pipeline implementado con GitHub Actions (`.github/workflows/CI.yml`):
+Pipeline implementado con GitHub Actions (`.github/workflows/CI.yml` y `.github/workflows/CD.yml`):
 
 | Job | Trigger | Descripción |
 |-----|---------|-------------|
 | `test` | Todo push y PR | Análisis estático (ruff) + tests con cobertura |
 | `prometheus-rules` | Todo push y PR | Validación de reglas de alerta con promtool |
-| `build-and-push` | Push a develop/staging/main | Build y push de imagen Docker a ghcr.io |
-| `deploy-dev` | Push a develop | Deploy a EC2 dev + health check + rollback automático |
-| `deploy-staging` | Push a staging | Deploy a EC2 staging + health check + rollback automático |
-| `deploy-prod` | Push a main | Deploy a EC2 prod + health check + rollback automático |
+| `build-and-scan` | Push a develop/staging/main | Build de imagen Docker + escaneo con Trivy |
+| `push` | Push a develop/staging/main | Push de imagen Docker a Amazon ECR |
+| `deploy-develop` | CI exitoso en develop | Deploy a EC2 dev vía SSM + health check + rollback automático |
+| `deploy-staging` | CI exitoso en staging | Deploy a EC2 staging vía SSM + health check + rollback automático |
+| `deploy-prod` | CI exitoso en main | Deploy a EC2 prod vía SSM + health check + rollback automático |
 
-El deploy usa rolling update via `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
+El deploy usa reemplazo controlado con Docker Compose vía AWS SSM. Antes de descargar la nueva imagen, el pipeline conserva una etiqueta local de rollback; luego levanta el stack y verifica `GET /health`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior y el workflow queda marcado como fallido.
 
 ## Monitoreo
 
@@ -157,4 +158,4 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 - Canal de notificaciones: Slack
 - Testing de reglas de alerta con promtool
 - Decisiones de diseño del dashboard de Grafana
-- Estrategia de despliegue: Rolling Update con Docker Compose
+- Estrategia de despliegue: reemplazo controlado con health check y rollback
