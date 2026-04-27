@@ -65,19 +65,28 @@ Response 200: { "status": "ok" }
 
 ## CI/CD
 
-Pipeline implementado con GitHub Actions (`.github/workflows/CI.yml` y `.github/workflows/CD.yml`):
+El pipeline está dividido en dos workflows de GitHub Actions:
+
+### CI (`CI.yml`) — se ejecuta en todo push y PR
 
 | Job | Trigger | Descripción |
 |-----|---------|-------------|
 | `test` | Todo push y PR | Análisis estático (ruff) + tests con cobertura |
 | `prometheus-rules` | Todo push y PR | Validación de reglas de alerta con promtool |
-| `build-and-scan` | Push a develop/staging/main | Build de imagen Docker + escaneo con Trivy |
-| `push` | Push a develop/staging/main | Push de imagen Docker a Amazon ECR |
-| `deploy-develop` | CI exitoso en develop | Deploy a EC2 dev vía SSM + health check + rollback automático |
-| `deploy-staging` | CI exitoso en staging | Deploy a EC2 staging vía SSM + health check + rollback automático |
-| `deploy-prod` | CI exitoso en main | Deploy a EC2 prod vía SSM + health check + rollback automático |
+| `build-and-scan` | Push a develop/staging/main | Build de imagen Docker + escaneo de vulnerabilidades con Trivy + commit del reporte en `Reports/report.txt` |
+| `push` | Push a develop/staging/main (después de `build-and-scan`) | Push de la imagen a Amazon ECR tageada con el nombre de la rama |
 
-El deploy usa reemplazo controlado con Docker Compose vía AWS SSM. Antes de descargar la nueva imagen, el pipeline conserva una etiqueta local de rollback; luego levanta el stack y verifica `GET /health`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior y el workflow queda marcado como fallido.
+### CD (`CD.yml`) — se ejecuta cuando CI finaliza con éxito
+
+| Job | Trigger | Descripción |
+|-----|---------|-------------|
+| `deploy-develop` | CI exitoso en `develop` | Deploy a EC2 `tp-development` via AWS SSM |
+| `deploy-staging` | CI exitoso en `staging` | Deploy a EC2 `tp-staging` via AWS SSM |
+| `deploy-prod` | CI exitoso en `main` | Deploy a EC2 `tp-production` via AWS SSM |
+
+El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
+
+Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
 
 ## Monitoreo
 
@@ -135,7 +144,8 @@ Cobertura actual: 100%
 ├── monitoring/
 │   ├── prometheus/
 │   │   ├── prometheus.yml
-│   │   └── rules/alerts.yml
+│   │   ├── rules/alerts.yml
+│   │   └── tests/alerts_test.yml
 │   ├── alertmanager/
 │   │   └── alertmanager.yml.template
 │   └── grafana/
@@ -143,19 +153,33 @@ Cobertura actual: 100%
 │       └── dashboards/
 ├── tests/
 ├── adr/
-├── .github/workflows/CI.yml
+├── Reports/
+│   └── report.txt
+├── .github/workflows/
+│   ├── CI.yml
+│   └── CD.yml
 ├── docker-compose.yaml
-└── Dockerfile
+├── Dockerfile
+├── poetry.lock
+├── pyproject.toml
+└── README.md
 ```
 
 ## ADRs
 
 Las decisiones de arquitectura están documentadas en `/adr`:
 
-- Stack de monitoreo: Prometheus + Grafana
-- Instrumentación de métricas con prometheus-client
-- Routing de alertas con Alertmanager
-- Canal de notificaciones: Slack
-- Testing de reglas de alerta con promtool
-- Decisiones de diseño del dashboard de Grafana
-- Estrategia de despliegue: reemplazo controlado con health check y rollback
+| # | Decisión |
+|---|----------|
+| ADR-NNN | Plataforma de cómputo: Amazon EC2 |
+| ADR-NNN | Registry de imágenes Docker: Amazon ECR |
+| ADR-NNN | Autenticación de GitHub Actions con AWS via OIDC |
+| ADR-NNN | Deploy remoto a EC2 via AWS SSM |
+| ADR-NNN | Estrategia de despliegue: Rolling Update con Docker Compose |
+| ADR-NNN | Escaneo de vulnerabilidades en imágenes Docker (Trivy) |
+| ADR-NNN | Stack de monitoreo: Prometheus + Grafana |
+| ADR-NNN | Instrumentación de métricas con prometheus-client |
+| ADR-NNN | Routing de alertas con Prometheus Alertmanager |
+| ADR-NNN | Canal de notificaciones: Slack |
+| ADR-NNN | Testing de reglas de alerta con promtool |
+| ADR-NNN | Decisiones de diseño del dashboard de Grafana |
