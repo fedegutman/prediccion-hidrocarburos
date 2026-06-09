@@ -1,0 +1,26 @@
+name: "oilgas"
+version: "1.0.0"
+config-version: 2
+
+profile: "oilgas"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Cada subcarpeta de models/ se materializa en su schema medallion.
+# silver -> vistas/tablas limpias ; gold -> modelo estrella.
+models:
+  oilgas:
+    silver:
+      +schema: silver
+      +materialized: view
+    gold:
+      +schema: gold
+      +materialized: table
