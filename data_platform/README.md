@@ -109,11 +109,27 @@ docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta \
 
 También se puede disparar desde la UI (http://localhost:8080).
 
+## Capa Silver (dbt)
+
+Modelos de limpieza/tipado sobre Bronze, materializados como **vistas** en el schema `silver`:
+
+| Modelo | Origen | Grano |
+|--------|--------|-------|
+| `stg_produccion` | `bronze.produccion` | idpozo × anio × mes |
+| `stg_pozos` | `bronze.pozos` | idpozo |
+
+Tienen tests de calidad de dbt (`not_null`, `accepted_values`, `unique` + un test singular de unicidad de grano). Para construir/testear:
+
+```bash
+docker compose exec airflow-scheduler dbt run  --project-dir /opt/airflow/dbt/oilgas --select silver
+docker compose exec airflow-scheduler dbt test --project-dir /opt/airflow/dbt/oilgas --select silver
+```
+
 ## Próximos pasos
 
 Lo que todavía falta construir:
 
-- **Etapas 2–3** — Modelos Silver y Gold (estrella) con dbt.
+- **Etapa 3** — Modelo Gold (estrella: fact + dimensiones) con dbt.
 - **Etapa 4** — Calidad de datos con consecuencia operativa.
 - **Etapa 5** — Backfill / reproceso por fecha.
 - **Etapa 6** — Gobierno y lineage (DataHub).
