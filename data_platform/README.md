@@ -125,11 +125,28 @@ docker compose exec airflow-scheduler dbt run  --project-dir /opt/airflow/dbt/oi
 docker compose exec airflow-scheduler dbt test --project-dir /opt/airflow/dbt/oilgas --select silver
 ```
 
+## Capa Gold — modelo estrella (dbt)
+
+Modelo dimensional materializado como **tablas** en el schema `gold` (ver `adr/ADR-017`):
+
+| Modelo | Tipo | Grano |
+|--------|------|-------|
+| `fct_produccion` | fact | idpozo × anio × mes |
+| `dim_pozo` | dimensión | idpozo |
+| `dim_empresa` | dimensión | empresa operadora |
+| `dim_area` | dimensión | área/yacimiento, cuenca, provincia |
+| `dim_tiempo` | dimensión | mes |
+
+Surrogate keys por hash (`md5` de la clave natural); SCD Type 1. Tests `relationships` garantizan integridad referencial fact↔dim.
+
+```bash
+docker compose exec airflow-scheduler dbt build --project-dir /opt/airflow/dbt/oilgas --select gold
+```
+
 ## Próximos pasos
 
 Lo que todavía falta construir:
 
-- **Etapa 3** — Modelo Gold (estrella: fact + dimensiones) con dbt.
 - **Etapa 4** — Calidad de datos con consecuencia operativa.
 - **Etapa 5** — Backfill / reproceso por fecha.
 - **Etapa 6** — Gobierno y lineage (DataHub).

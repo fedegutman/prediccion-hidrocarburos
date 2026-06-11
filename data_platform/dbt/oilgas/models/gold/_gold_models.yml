@@ -1,0 +1,61 @@
+version: 2
+
+models:
+  - name: dim_pozo
+    description: "Dimensión pozo (SCD Type 1). Grano: idpozo."
+    columns:
+      - name: pozo_sk
+        description: "Surrogate key (md5 de idpozo)."
+        data_tests: [not_null, unique]
+      - name: idpozo
+        data_tests: [not_null, unique]
+
+  - name: dim_empresa
+    description: "Dimensión empresa operadora."
+    columns:
+      - name: empresa_sk
+        data_tests: [not_null, unique]
+
+  - name: dim_area
+    description: "Dimensión geográfica (área/yacimiento, cuenca, provincia)."
+    columns:
+      - name: area_sk
+        data_tests: [not_null, unique]
+
+  - name: dim_tiempo
+    description: "Dimensión tiempo mensual."
+    columns:
+      - name: tiempo_sk
+        data_tests: [not_null, unique]
+
+  - name: fct_produccion
+    description: "Fact de producción mensual por pozo. Grano: idpozo × anio × mes."
+    columns:
+      - name: pozo_sk
+        description: "FK a dim_pozo."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_pozo')
+              field: pozo_sk
+      - name: empresa_sk
+        description: "FK a dim_empresa."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_empresa')
+              field: empresa_sk
+      - name: area_sk
+        description: "FK a dim_area."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_area')
+              field: area_sk
+      - name: tiempo_sk
+        description: "FK a dim_tiempo."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_tiempo')
+              field: tiempo_sk
