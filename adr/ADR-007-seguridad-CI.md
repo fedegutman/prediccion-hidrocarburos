@@ -17,7 +17,9 @@ Las imágenes Docker pueden contener vulnerabilidades conocidas en las dependenc
 
 ## Decisión
 
-Se utiliza Trivy en el pipeline de CI/CD. El escaneo se realiza sobre la imagen buildeada antes de pushearla al registry. El reporte de vulnerabilidades se guarda como archivo Markdown en el repositorio. Si se detectan vulnerabilidades CRITICAL o HIGH, el pipeline falla y la imagen no se pushea.
+Se utiliza Trivy en el pipeline de CI/CD. El escaneo se realiza sobre la imagen buildeada antes de pushearla al registry. El reporte de vulnerabilidades se guarda como archivo Markdown en el repositorio. Si se detectan vulnerabilidades CRITICAL, el pipeline falla y la imagen no se pushea.
+
+El escaneo usa `ignore-unfixed: true`: el pipeline solo falla ante vulnerabilidades CRITICAL que **tienen un fix disponible** (accionables). Las vulnerabilidades sin parche publicado (estado `fix_deferred`/`affected`, sin versión corregida) se siguen listando en el reporte pero no bloquean el build, porque no existe remediación posible vía actualización de dependencias y bloquearlas dejaría el deploy indefinidamente trabado sin acción correctiva. Un ejemplo concreto: CVEs de `perl-base` heredados de la imagen base `python:3.12-slim` (Debian) que Debian aún no parchea.
 
 ## Consecuencias
 

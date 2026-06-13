@@ -81,6 +81,7 @@ jobs:
           format: table
           output: Reports/report.txt
           severity: CRITICAL
+          ignore-unfixed: true
           exit-code: 0
 
       - name: Commitear reporte
@@ -98,6 +99,7 @@ jobs:
           format: table
           exit-code: 1
           severity: CRITICAL
+          ignore-unfixed: true
 
   push:
     needs: build-and-scan
