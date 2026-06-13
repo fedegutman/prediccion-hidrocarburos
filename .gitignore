@@ -139,6 +139,9 @@ celerybeat.pid
 # macOS
 .DS_Store
 
+# Claves privadas (nunca versionar)
+*.pem
+
 # Secrets en configuración de monitoring
 monitoring/alertmanager/alertmanager.yml
 monitoring/grafana/provisioning/alerting/contactpoints.yml
@@ -211,3 +214,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Apuntes personales (no se versionan)
+notes/

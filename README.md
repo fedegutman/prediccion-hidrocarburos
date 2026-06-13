@@ -8,9 +8,11 @@ Sistema para pronosticar producción de hidrocarburos por pozo. Fase 1: servicio
 
 | Ambiente | API | Grafana | Prometheus |
 |----------|-----|---------|------------|
-| Producción | http://18.188.153.25:8000 | http://18.188.153.25:3000 | http://18.188.153.25:9090 |
-| Staging | http://18.118.110.92:8000 | http://18.118.110.92:3000 | http://18.118.110.92:9090 |
-| Desarrollo | http://3.142.209.241:8000 | http://3.142.209.241:3000 | http://3.142.209.241:9090 |
+| Producción | http://3.144.71.244:8000 | http://3.144.71.244:3000 | http://3.144.71.244:9090 |
+| Staging | http://52.14.130.77:8000 | http://52.14.130.77:3000 | http://52.14.130.77:9090 |
+| Desarrollo | http://18.222.31.105:8000 | http://18.222.31.105:3000 | http://18.222.31.105:9090 |
+
+> Las IPs son públicas dinámicas: cambian si se apagan y vuelven a prender las instancias. Para refrescarlas: `cd infra/terraform && terraform output instance_public_ips`.
 
 Documentación interactiva (Swagger): `<host>:8000/docs`
 
@@ -87,6 +89,17 @@ El pipeline está dividido en dos workflows de GitHub Actions:
 El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
 
 Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
+
+### Secrets de GitHub Actions
+
+El pipeline requiere estos cuatro secrets (Settings → Secrets and variables → Actions). Los dos ARN salen de la infraestructura (`infra/terraform`, ver `terraform output`).
+
+| Secret | Usado por | Para qué sirve |
+|--------|-----------|----------------|
+| `AWS_CI_ROLE_ARN` | CI (`build-and-scan`, `push`) | ARN del rol `GithubCIRole`. GitHub Actions lo asume via OIDC para autenticarse en ECR y pushear la imagen. |
+| `AWS_CD_ROLE_ARN` | CD (`deploy-*`) | ARN del rol `InstanceCDRole`. GitHub Actions lo asume via OIDC para ejecutar el deploy en las EC2 via SSM. |
+| `SLACK_WEBHOOK_URL` | CD | Incoming Webhook de Slack. Se inyecta en el `.env` de la instancia para que Alertmanager envíe las alertas al canal. |
+| `GH_TOKEN` | CD | Personal Access Token con scope `repo`. El script de deploy lo usa para clonar el repositorio (privado) dentro de la instancia. |
 
 ## Monitoreo
 
