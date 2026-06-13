@@ -1,0 +1,8 @@
+# Estado de Terraform (puede contener datos sensibles) y archivos locales.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+*.tfvars
+!*.tfvars.example
