@@ -17,7 +17,12 @@ cleaned as (
         -- tiempo
         anio,
         mes,
-        make_date(anio::int, mes::int, 1)           as fecha_mes,
+        -- Defensivo: si anio/mes vienen fuera de rango, devolvemos NULL en vez de dejar
+        -- que make_date aborte TODO el build (silver+gold) con un error de fecha.
+        case
+            when anio between 1900 and 2100 and mes between 1 and 12
+            then make_date(anio::int, mes::int, 1)
+        end                                         as fecha_mes,
 
         -- medidas de producción (se PRESERVA NULL = "no reportado"; Silver limpia/tipa, no imputa)
         prod_pet,
