@@ -19,14 +19,13 @@ models:
           - accepted_values:    # validez: dominio válido de mes
               values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
               quote: false
+      # Medidas: NULL es legítimo (medida no reportada por la operadora), distinto de un 0 real.
+      # NO usamos not_null duro (rompería sobre faltantes legítimos y, post-coalesce, era un test vacío).
+      # La completitud se vigila con severidad 'warn' en tests/completitud_medidas_produccion.sql
       - name: prod_pet
-        description: "Producción de petróleo del período."
-        data_tests:
-          - not_null
+        description: "Producción de petróleo del período. NULL = no reportado (no se imputa)."
       - name: prod_gas
-        description: "Producción de gas del período."
-        data_tests:
-          - not_null
+        description: "Producción de gas del período. NULL = no reportado (no se imputa)."
 
   - name: stg_pozos
     description: "Listado maestro de pozos, limpio y tipado. Grano: idpozo."
