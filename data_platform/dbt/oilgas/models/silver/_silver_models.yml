@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_produccion
+    description: "Producción mensual de pozos, limpia y tipada. Grano: idpozo × anio × mes."
+    columns:
+      - name: idpozo
+        description: "Identificador del pozo."
+        data_tests:
+          - not_null            # completitud
+      - name: anio
+        description: "Año del período."
+        data_tests:
+          - not_null
+      - name: mes
+        description: "Mes del período (1-12)."
+        data_tests:
+          - not_null
+          - accepted_values:    # validez: dominio válido de mes
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+              quote: false
+      - name: prod_pet
+        description: "Producción de petróleo del período."
+        data_tests:
+          - not_null
+      - name: prod_gas
+        description: "Producción de gas del período."
+        data_tests:
+          - not_null
+
+  - name: stg_pozos
+    description: "Listado maestro de pozos, limpio y tipado. Grano: idpozo."
+    columns:
+      - name: idpozo
+        description: "Identificador del pozo (clave natural)."
+        data_tests:
+          - not_null
+          - unique              # unicidad: un registro por pozo
