@@ -2,10 +2,10 @@
 
 Plataforma para integrar datos públicos de producción de hidrocarburos de [datos.gob.ar](https://datos.gob.ar) usando **arquitectura medallion** (Bronze → Silver → Gold).
 
-> **Estado actual: Infraestructura base.**
-> Está levantada la infra (Airflow + warehouse + dbt) y verificada la conexión, pero todavía
-> **no hay datos ni transformaciones**: los schemas del warehouse existen vacíos. La extracción,
-> el modelado y el resto se construyen en las próximas etapas (ver [Próximos pasos](#próximos-pasos)).
+> **Estado actual: Bronze.**
+> Infra levantada (Airflow + warehouse + dbt) y **ingesta a Bronze funcionando**: el DAG
+> `bronze_ingesta` baja las dos fuentes y las carga al schema `bronze`. Las capas Silver/Gold,
+> la calidad, el gobierno y el BI se construyen en las próximas etapas (ver [Próximos pasos](#próximos-pasos)).
 
 ## Qué está montado hoy
 
@@ -60,8 +60,9 @@ de Airflow (ver `_PIP_ADDITIONAL_REQUIREMENTS` en `.env`).
 data_platform/
 ├── docker-compose.yaml        # Airflow + warehouse + dbt
 ├── .env                       # AIRFLOW_UID y librerías a instalar
-├── dags/                      # DAGs de Airflow (workflows) — vacío por ahora
-├── ingestion/                 # helpers Python de extracción
+├── dags/                      # DAGs de Airflow (workflows)
+│   ├── bronze_ingesta.py      #   DAG de ingesta a Bronze
+│   └── bronze_lib.py          #   helpers de descarga + carga al warehouse
 ├── warehouse/init/            # SQL de inicialización (schemas medallion)
 └── dbt/oilgas/                # proyecto dbt
     ├── dbt_project.yml
@@ -84,11 +85,34 @@ docker compose exec airflow-scheduler dbt test  --project-dir /opt/airflow/dbt/o
 Los DAGs son archivos Python en `dags/`. Al guardarlos, el `dag-processor` de Airflow los detecta
 automáticamente (puede tardar unos segundos en aparecer/actualizarse en la UI). No hace falta reiniciar.
 
+## Ingesta a Bronze (DAG `bronze_ingesta`)
+
+Baja las dos fuentes de datos.gob.ar y las aterriza crudas en el schema `bronze`:
+
+| Fuente | Tabla destino | Tipo de carga |
+|--------|---------------|---------------|
+| Producción de pozos no convencional | `bronze.produccion` | Incremental, merge/upsert por período `(anio, mes)` |
+| Listado de pozos por operadora | `bronze.pozos` | Full (reemplazo del snapshot) |
+
+Está **parametrizado por rango de fechas** (`date_from` / `date_to`), lo que permite reprocesar un
+período puntual (backfill). Por defecto carga la ventana **2023–2024** para que la demo sea rápida.
+La carga de producción es **idempotente**: reejecutar el mismo rango no duplica datos. Ver `adr/ADR-016`.
+
+```bash
+# disparar con los parámetros por defecto (2023–2024)
+docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta
+
+# disparar un rango específico (backfill)
+docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta \
+  --conf '{"date_from": "2020-01-01", "date_to": "2020-12-31"}'
+```
+
+También se puede disparar desde la UI (http://localhost:8080).
+
 ## Próximos pasos
 
 Lo que todavía falta construir:
 
-- **Etapa 1** — Extracción → Bronze: DAG que baja los CSV de datos.gob.ar al schema `bronze`.
 - **Etapas 2–3** — Modelos Silver y Gold (estrella) con dbt.
 - **Etapa 4** — Calidad de datos con consecuencia operativa.
 - **Etapa 5** — Backfill / reproceso por fecha.
