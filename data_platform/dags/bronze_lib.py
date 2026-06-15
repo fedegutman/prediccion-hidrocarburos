@@ -39,17 +39,31 @@ def download_csv(url: str, dest: str) -> str:
 
 
 def load_full_replace(csv_path: str, schema: str, table: str) -> int:
-    """Carga FULL: reemplaza por completo la tabla destino (snapshot).
+    """Carga FULL: reemplaza por completo el contenido de la tabla destino (snapshot).
 
     Usado para el listado de pozos (maestro de estado actual). Idempotente:
     correrlo N veces deja siempre el mismo contenido.
+
+    Si la tabla ya existe, se vacía con TRUNCATE y se reinserta (NO se dropea):
+    un DROP fallaría cuando hay vistas dependientes (ej. silver.stg_pozos),
+    mientras que TRUNCATE conserva el objeto y la dependencia sigue válida.
 
     :return: cantidad de filas cargadas.
     """
     df = pd.read_csv(csv_path, encoding="utf-8-sig", low_memory=False)
     eng = _engine()
-    df.to_sql(table, eng, schema=schema, if_exists="replace", index=False,
-              method="multi", chunksize=10_000)
+    insp = inspect(eng)
+
+    with eng.begin() as conn:
+        if insp.has_table(table, schema=schema):
+            conn.execute(text(f"TRUNCATE TABLE {schema}.{table}"))
+            df.to_sql(table, conn, schema=schema, if_exists="append", index=False,
+                      method="multi", chunksize=10_000)
+        else:
+            # primera vez: la tabla no existe, to_sql la crea
+            df.to_sql(table, conn, schema=schema, if_exists="replace", index=False,
+                      method="multi", chunksize=10_000)
+
     return len(df)
 
 
