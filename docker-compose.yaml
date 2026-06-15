@@ -5,6 +5,11 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      # API key: default solo para dev; en prod se setea via secret (env var API_KEY).
+      - API_KEY=${API_KEY:-abcdef12345}
+      # Conexión al warehouse (gold). En contenedor, el warehouse del host se alcanza
+      # via host.docker.internal (Docker Desktop). En prod se sobreescribe con el secret.
+      - WAREHOUSE_DSN=${WAREHOUSE_DSN:-postgresql://dwh:dwh@host.docker.internal:5433/oilgas}
     restart: unless-stopped
 
   alertmanager:
