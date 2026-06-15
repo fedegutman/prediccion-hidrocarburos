@@ -72,6 +72,9 @@ def get_setup_token():
 
 
 def setup_metabase(setup_token):
+    # Las versiones nuevas de Metabase ignoran/rechazan la base embebida en el
+    # payload de /api/setup; aca solo se crea el usuario admin y la conexion al
+    # warehouse se da de alta aparte en create_database().
     payload = {
         "token": setup_token,
         "user": {
@@ -80,20 +83,6 @@ def setup_metabase(setup_token):
             "first_name": MB_ADMIN_FIRST_NAME,
             "last_name": MB_ADMIN_LAST_NAME,
             "site_name": MB_SITE_NAME,
-        },
-        "database": {
-            "name": "DWH Warehouse",
-            "engine": "postgres",
-            "details": {
-                "host": PG_HOST,
-                "port": PG_PORT,
-                "dbname": PG_DB,
-                "user": PG_USER,
-                "password": PG_PASSWORD,
-                "schema-filter-patterns": "gold",
-            },
-            "auto_run_queries": True,
-            "is_full_sync": True,
         },
         "prefs": {
             "allow_tracking": False,
@@ -108,18 +97,33 @@ def setup_metabase(setup_token):
     return r.json().get("id")
 
 
-def get_database_id(session_token):
+def create_database(session_token):
+    """Da de alta la conexion al warehouse Postgres (schema gold) y devuelve su id."""
     headers = {"X-Metabase-Session": session_token}
-    for _ in range(20):
-        r = requests.get(f"{MB_HOST}/api/database", headers=headers, timeout=10)
-        r.raise_for_status()
-        databases = r.json().get("data", r.json() if isinstance(r.json(), list) else [])
-        for db in databases:
-            if db.get("name") == "DWH Warehouse":
-                return db["id"]
-        time.sleep(3)
-    print("ERROR: no se encontro la base de datos.")
-    sys.exit(1)
+    payload = {
+        "name": "DWH Warehouse",
+        "engine": "postgres",
+        "details": {
+            "host": PG_HOST,
+            "port": PG_PORT,
+            "dbname": PG_DB,
+            "user": PG_USER,
+            "password": PG_PASSWORD,
+            "schema-filters-type": "inclusion",
+            "schema-filters-patterns": "gold",
+        },
+        "auto_run_queries": True,
+        "is_full_sync": True,
+    }
+    r = requests.post(f"{MB_HOST}/api/database", json=payload, headers=headers, timeout=30)
+    if r.status_code not in (200, 201, 202):
+        print(f"ERROR creando la base: {r.status_code} {r.text}")
+        sys.exit(1)
+    db_id = r.json()["id"]
+    print(f"Base 'DWH Warehouse' creada con id={db_id}.")
+    requests.post(f"{MB_HOST}/api/database/{db_id}/sync_schema", headers=headers, timeout=30)
+    time.sleep(8)
+    return db_id
 
 
 def create_card(session_token, db_id, name, query, display="bar"):
@@ -156,15 +160,24 @@ def create_dashboard(session_token, name, card_ids):
         print(f"AVISO: no se pudo crear el dashboard '{name}': {r.status_code}")
         return
     dashboard_id = r.json()["id"]
-    for idx, card_id in enumerate(card_ids):
-        if card_id is None:
-            continue
-        requests.post(
-            f"{MB_HOST}/api/dashboard/{dashboard_id}/cards",
-            json={"cardId": card_id, "row": idx * 6, "col": 0, "size_x": 12, "size_y": 6},
-            headers=headers,
-            timeout=10,
-        )
+    # Metabase nuevo no acepta POST /dashboard/{id}/cards: las cards se mandan
+    # juntas en un PUT /dashboard/{id} bajo la clave "dashcards".
+    dashcards = []
+    for idx, card_id in enumerate(c for c in card_ids if c is not None):
+        dashcards.append({
+            "id": -(idx + 1),
+            "card_id": card_id,
+            "row": idx * 7,
+            "col": 0,
+            "size_x": 24,
+            "size_y": 7,
+        })
+    requests.put(
+        f"{MB_HOST}/api/dashboard/{dashboard_id}",
+        json={"dashcards": dashcards},
+        headers=headers,
+        timeout=30,
+    )
     print(f"Dashboard '{name}' creado con id={dashboard_id}.")
 
 
@@ -175,7 +188,7 @@ def main():
         print("Metabase ya esta configurado, saltando setup.")
         sys.exit(0)
     session_token = setup_metabase(setup_token)
-    db_id = get_database_id(session_token)
+    db_id = create_database(session_token)
     card1 = create_card(session_token, db_id, "Produccion por mes", QUERY_PRODUCCION_POR_MES, "line")
     card2 = create_card(session_token, db_id, "Top 10 empresas por produccion", QUERY_TOP_EMPRESAS, "bar")
     card3 = create_card(session_token, db_id, "Produccion por cuenca", QUERY_PRODUCCION_POR_CUENCA, "bar")
