@@ -338,6 +338,13 @@ services:
 
   dbt-docs:
     image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.7}
+    # Carga el .env para que el entrypoint de la imagen instale dbt
+    # (_PIP_ADDITIONAL_REQUIREMENTS); si no, el contenedor no tiene el binario `dbt`.
+    env_file:
+      - ${ENV_FILE_PATH:-.env}
+    environment:
+      _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+      DBT_PROFILES_DIR: '/opt/airflow/dbt/oilgas'
     command: >
       bash -c "
         dbt docs generate --project-dir /opt/airflow/dbt/oilgas --profiles-dir /opt/airflow/dbt/oilgas &&
