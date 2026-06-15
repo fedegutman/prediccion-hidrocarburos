@@ -17,19 +17,24 @@ cleaned as (
         -- tiempo
         anio,
         mes,
-        make_date(anio::int, mes::int, 1)           as fecha_mes,
+        -- Defensivo: si anio/mes vienen fuera de rango, devolvemos NULL en vez de dejar
+        -- que make_date aborte TODO el build (silver+gold) con un error de fecha.
+        case
+            when anio between 1900 and 2100 and mes between 1 and 12
+            then make_date(anio::int, mes::int, 1)
+        end                                         as fecha_mes,
 
-        -- medidas de producción
-        coalesce(prod_pet, 0)                       as prod_pet,
-        coalesce(prod_gas, 0)                       as prod_gas,
-        coalesce(prod_agua, 0)                      as prod_agua,
+        -- medidas de producción (se PRESERVA NULL = "no reportado"; Silver limpia/tipa, no imputa)
+        prod_pet,
+        prod_gas,
+        prod_agua,
 
-        -- medidas de inyección
-        coalesce(iny_agua, 0)                       as iny_agua,
-        coalesce(iny_gas, 0)                        as iny_gas,
-        coalesce(iny_co2, 0)                        as iny_co2,
-        coalesce(iny_otro, 0)                       as iny_otro,
-        coalesce(tef, 0)                            as tef,
+        -- medidas de inyección (idem: NULL = ausencia de dato, distinto de un cero real)
+        iny_agua,
+        iny_gas,
+        iny_co2,
+        iny_otro,
+        tef,
 
         -- atributos descriptivos (insumo para las dimensiones en Gold)
         nullif(trim(empresa), '')                   as empresa,

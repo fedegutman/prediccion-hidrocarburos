@@ -16,11 +16,24 @@ clean-targets:
 
 # Cada subcarpeta de models/ se materializa en su schema medallion.
 # silver -> vistas/tablas limpias ; gold -> modelo estrella.
+# persist_docs: vuelca las descriptions de modelos/columnas como COMMENT en Postgres
+# (mejora discoverability / gobierno de datos).
 models:
   oilgas:
+    +persist_docs:
+      relation: true
+      columns: true
     silver:
       +schema: silver
       +materialized: view
     gold:
       +schema: gold
       +materialized: table
+
+# store_failures: las filas que fallan un test (incluidos los warn) se PERSISTEN en tablas
+# del schema dq_failures, en vez de perderse en el log. Cada corrida sobreescribe la tabla.
+# Es la base para "calidad de datos persistida con consecuencia" (auditoría de DQ).
+tests:
+  oilgas:
+    +store_failures: true
+    +schema: dq_failures

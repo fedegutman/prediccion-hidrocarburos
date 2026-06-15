@@ -8,44 +8,70 @@ models:
         description: "Surrogate key (md5 de idpozo)."
         data_tests: [not_null, unique]
       - name: idpozo
+        description: "Identificador natural del pozo."
         data_tests: [not_null, unique]
 
   - name: dim_empresa
-    description: "Dimensión empresa operadora."
+    description: "Dimensión empresa operadora. Grano: id_empresa."
     columns:
       - name: empresa_sk
+        description: "Surrogate key (md5 de id_empresa)."
         data_tests: [not_null, unique]
+      - name: id_empresa
+        description: "Id de la operadora ('__NA__' si la fuente no lo trae)."
+        data_tests:
+          - not_null
 
   - name: dim_area
     description: "Dimensión geográfica (área/yacimiento, cuenca, provincia)."
     columns:
       - name: area_sk
+        description: "Surrogate key (md5 de la combinación geográfica normalizada)."
         data_tests: [not_null, unique]
 
   - name: dim_tiempo
-    description: "Dimensión tiempo mensual."
+    description: "Dimensión tiempo mensual (calendario denso entre el primer y el último mes con datos)."
     columns:
       - name: tiempo_sk
+        description: "Surrogate key AAAAMM (entero)."
         data_tests: [not_null, unique]
+      - name: fecha_mes
+        description: "Primer día del mes del período."
+        data_tests:
+          - not_null
+      - name: trimestre
+        description: "Trimestre del año (1-4)."
+        data_tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              quote: false
 
   - name: fct_produccion
     description: "Fact de producción mensual por pozo. Grano: idpozo × anio × mes."
+    # Contract enforced: la fact alimenta BI/ML, así que validamos los tipos en BUILD-TIME
+    # (un cambio de tipo en bronze/silver falla acá, no aguas abajo en un dashboard/modelo).
+    config:
+      contract:
+        enforced: true
     columns:
       - name: pozo_sk
-        description: "FK a dim_pozo."
+        data_type: text
+        description: "FK a dim_pozo (md5 de idpozo)."
         data_tests:
           - not_null
           - relationships:
               to: ref('dim_pozo')
               field: pozo_sk
       - name: empresa_sk
-        description: "FK a dim_empresa."
+        data_type: text
+        description: "FK a dim_empresa (operadora del período)."
         data_tests:
           - not_null
           - relationships:
               to: ref('dim_empresa')
               field: empresa_sk
       - name: area_sk
+        data_type: text
         description: "FK a dim_area."
         data_tests:
           - not_null
@@ -53,9 +79,46 @@ models:
               to: ref('dim_area')
               field: area_sk
       - name: tiempo_sk
-        description: "FK a dim_tiempo."
+        data_type: integer
+        description: "FK a dim_tiempo (AAAAMM)."
         data_tests:
           - not_null
           - relationships:
               to: ref('dim_tiempo')
               field: tiempo_sk
+      - name: idpozo
+        data_type: bigint
+        description: "Clave degenerada: identificador del pozo."
+      - name: anio
+        data_type: bigint
+        description: "Clave degenerada: año del período."
+      - name: mes
+        data_type: bigint
+        description: "Clave degenerada: mes del período."
+      - name: fecha_mes
+        data_type: date
+        description: "Clave degenerada: primer día del mes del período."
+      - name: prod_pet
+        data_type: double precision
+        description: "Producción de petróleo del período. NULL = no reportado."
+      - name: prod_gas
+        data_type: double precision
+        description: "Producción de gas del período. NULL = no reportado."
+      - name: prod_agua
+        data_type: double precision
+        description: "Producción de agua del período. NULL = no reportado."
+      - name: iny_agua
+        data_type: double precision
+        description: "Inyección de agua del período. NULL = no reportado."
+      - name: iny_gas
+        data_type: double precision
+        description: "Inyección de gas del período. NULL = no reportado."
+      - name: iny_co2
+        data_type: double precision
+        description: "Inyección de CO2 del período. NULL = no reportado."
+      - name: iny_otro
+        data_type: double precision
+        description: "Inyección de otros fluidos del período. NULL = no reportado."
+      - name: tef
+        data_type: double precision
+        description: "Tiempo efectivo de producción. NULL = no reportado."
