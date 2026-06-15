@@ -301,6 +301,34 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+  
+  metabase:
+    image: metabase/metabase:latest
+    ports:
+      - "3001:3000"
+    depends_on:
+      - warehouse
+    restart: unless-stopped
+  
+  metabase-init:
+    image: python:3.12-slim
+    volumes:
+      - ./metabase:/app
+    working_dir: /app
+    command: >
+      sh -c "pip install requests -q && python setup_metabase.py"
+    environment:
+      MB_HOST: http://metabase:3000
+      MB_ADMIN_EMAIL: admin@oilgas.com
+      MB_ADMIN_PASSWORD: Admin1234!
+      PG_HOST: warehouse
+      PG_PORT: 5432
+      PG_DB: oilgas
+      PG_USER: dwh
+      PG_PASSWORD: dwh
+    depends_on:
+      - metabase
+    restart: on-failure
 
 volumes:
   postgres-db-volume:
