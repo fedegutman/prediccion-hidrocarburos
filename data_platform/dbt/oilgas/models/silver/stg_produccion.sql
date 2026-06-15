@@ -55,6 +55,52 @@ cleaned as (
 
     from source
 
+),
+
+deduped as (
+
+    -- La fuente (datos.gob.ar) trae filas duplicadas por grano (idpozo, anio, mes).
+    -- Silver debe garantizar una sola fila por grano: nos quedamos con una por
+    -- partición. Si hay rectificaciones (mismo grano, valores distintos), se
+    -- prefiere la fila marcada como rectificada.
+    select * from (
+        select
+            cleaned.*,
+            row_number() over (
+                partition by idpozo, anio, mes
+                order by rectificado desc
+            ) as _rn
+        from cleaned
+    ) ranked
+    where _rn = 1
+
 )
 
-select * from cleaned
+select
+    idpozo,
+    id_empresa,
+    anio,
+    mes,
+    fecha_mes,
+    prod_pet,
+    prod_gas,
+    prod_agua,
+    iny_agua,
+    iny_gas,
+    iny_co2,
+    iny_otro,
+    tef,
+    empresa,
+    sigla,
+    area_yacimiento,
+    cuenca,
+    provincia,
+    tipo_pozo,
+    tipo_estado,
+    tipo_extraccion,
+    tipo_recurso,
+    clasificacion,
+    sub_tipo_recurso,
+    rectificado,
+    habilitado
+from deduped
