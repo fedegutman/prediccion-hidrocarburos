@@ -41,7 +41,7 @@ docker compose up -d --build
 
 ## API
 
-Autenticación: header `X-API-Key` (default de dev: `abcdef12345`; configurable con la env var `API_KEY` — ver sección **Configuración**).
+Autenticación: header `X-API-Key`. El valor se configura con la env var `API_KEY` (ver sección **Configuración**); **no hay default** — si no está seteada, la API responde 503.
 
 ### Endpoints
 
@@ -92,12 +92,12 @@ La API se configura por variables de entorno, con defaults solo para desarrollo.
 
 | Variable | Default (dev) | Descripción |
 |----------|---------------|-------------|
-| `API_KEY` | `abcdef12345` | Clave del header `X-API-Key`. En prod **debe** setearse a un valor secreto. |
+| `API_KEY` | _(sin default — requerida)_ | Clave del header `X-API-Key`. **Debe** setearse (en prod, un valor secreto); si falta, la API responde 503. |
 | `WAREHOUSE_DSN` | `postgresql://dwh:dwh@localhost:5433/oilgas` | Conexión read-only al data warehouse (capa gold). En prod apunta a la base real. |
 
-- **Local sin Docker:** no hace falta setear nada (los defaults apuntan al warehouse local):
+- **Local sin Docker:** seteá `API_KEY` (no tiene default); el warehouse usa el default local:
   ```bash
-  poetry run uvicorn app.main:app --reload
+  API_KEY=clave-local poetry run uvicorn app.main:app --reload
   ```
 - **Local con Docker:** el contenedor alcanza el warehouse del host via `host.docker.internal:5433` (ya es el default en `docker-compose.yaml`).
 - **Producción:** setear `API_KEY` y `WAREHOUSE_DSN`. El valor de `WAREHOUSE_DSN` depende de dónde se despliegue el warehouse.

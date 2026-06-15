@@ -1,5 +1,6 @@
 """Rutas para el pronostico de produccion de pozos."""
 
+import hmac
 import os
 from datetime import date, timedelta
 from typing import List
@@ -12,10 +13,6 @@ from app.limiter import limiter
 from app.mock_data import MOCK_WELLS, MOCK_BASE_PRODUCTION, DAILY_DECLINE
 from app.metrics.business import FORECAST_REQUESTS_BY_WELL, FORECAST_DATE_RANGE_DAYS
 
-
-# La API key se toma de la variable de entorno API_KEY. El default es solo para
-# desarrollo/tests; en producción se DEBE setear API_KEY (y rotarla).
-API_KEY = os.getenv("API_KEY", "abcdef12345")
 
 router = APIRouter()
 
@@ -35,13 +32,21 @@ class ForecastResponse(BaseModel):
 
 
 def _validate_api_key(x_api_key: str) -> None:
-    """Valida que la API key sea correcta.
+    """Valida la API key contra la configurada en la variable de entorno API_KEY.
+
+    No hay default hardcodeado: si el servidor no tiene API_KEY configurada,
+    falla cerrado (rechaza la request). La comparación es de tiempo constante
+    para no filtrar información por timing.
 
     :param x_api_key: API key recibida en el header.
-    :raises HTTPException: Si la API key es invalida o esta ausente (403).
+    :raises HTTPException: 503 si el servidor no tiene API_KEY configurada;
+        403 si la API key es inválida o está ausente.
     """
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=403, detail="Acceso denegado. API Key invalida o faltante en el header.")
+    expected = os.getenv("API_KEY")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Servicio mal configurado: falta la variable de entorno API_KEY.")
+    if not hmac.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=403, detail="Acceso denegado. API Key inválida o faltante en el header.")
 
 
 def _generate_forecast(id_well: str, date_start: date, date_end: date) -> List[ForecastPoint]:

@@ -12,7 +12,7 @@ from app import db
 from app.main import app
 
 client = TestClient(app)
-HEADERS = {"X-API-Key": "abcdef12345"}
+HEADERS = {"X-API-Key": "test-api-key"}
 
 _FAKE_POZO = {
     "idpozo": "10001",
@@ -101,3 +101,10 @@ def test_pozos_503_does_not_leak_connection_details(monkeypatch) -> None:
     assert "postgresql://" not in body
     assert "supersecreto" not in body
     assert "10.0.0.5" not in body
+
+
+def test_pozos_503_when_server_api_key_unset(monkeypatch) -> None:
+    """SEGURIDAD: si el servidor no tiene API_KEY configurada, falla cerrado (503)."""
+    monkeypatch.delenv("API_KEY", raising=False)
+    response = client.get("/api/v1/pozos", headers=HEADERS)
+    assert response.status_code == 503

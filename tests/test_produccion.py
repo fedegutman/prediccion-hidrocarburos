@@ -12,7 +12,7 @@ from app import db
 from app.main import app
 
 client = TestClient(app)
-HEADERS = {"X-API-Key": "abcdef12345"}
+HEADERS = {"X-API-Key": "test-api-key"}
 
 _FAKE_ROW = {
     "idpozo": "10001",

@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 client = TestClient(app)
-HEADERS = {"X-API-Key": "abcdef12345"}
+HEADERS = {"X-API-Key": "test-api-key"}
 
 
 def test_produccion_devuelve_datos_reales() -> None:
