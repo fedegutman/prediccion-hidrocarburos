@@ -41,7 +41,7 @@ docker compose up -d --build
 
 ## API
 
-Autenticación: header `X-API-Key: abcdef12345`
+Autenticación: header `X-API-Key`. El valor se configura con la env var `API_KEY` (ver sección **Configuración**); **no hay default** — si no está seteada, la API responde 503.
 
 ### Endpoints
 
@@ -53,17 +53,56 @@ Response 403: API key inválida
 Response 400: date_end < date_start
 ```
 
-**GET /api/v1/wells**
+**GET /api/v1/wells** _(deprecado — usar `/api/v1/pozos`)_
 ```
 Params: date_query (YYYY-MM-DD)
-Response 200: [{ "id_well": "POZO-001" }, ...]
+Response 200: [{ "id_well": "POZO-001", ... }]   (datos MOCK de Fase 1)
 Response 403: API key inválida
+```
+
+**GET /api/v1/produccion** — producción mensual real (capa gold)
+```
+Params: idpozo (opcional), anio (opcional), limit (1-1000, def. 100), offset
+Response 200: [{ "idpozo", "anio", "mes", "fecha_mes", "empresa", "cuenca",
+                 "provincia", "area_yacimiento", "prod_pet", "prod_gas", "prod_agua" }, ...]
+Response 403: API key inválida | 503: warehouse no disponible
+```
+
+**GET /api/v1/pozos** — maestro de pozos real (capa gold)
+```
+Params: provincia (opcional), cuenca (opcional), limit (1-1000, def. 100), offset
+Response 200: [{ "idpozo", "sigla", "formacion_productiva", "area_yacimiento",
+                 "cuenca", "provincia", "tipo_reservorio", "profundidad" }, ...]
+Response 403 | 503
+```
+
+**GET /api/v1/pozos/{idpozo}** — un pozo por id
+```
+Response 200: { ...pozo... } | 404: no existe | 403 | 503
 ```
 
 **GET /health**
 ```
 Response 200: { "status": "ok" }
 ```
+
+## Configuración (variables de entorno)
+
+La API se configura por variables de entorno, con defaults solo para desarrollo. **En producción se setean como secrets de GitHub** y el deploy las inyecta.
+
+| Variable | Default (dev) | Descripción |
+|----------|---------------|-------------|
+| `API_KEY` | _(sin default — requerida)_ | Clave del header `X-API-Key`. **Debe** setearse (en prod, un valor secreto); si falta, la API responde 503. |
+| `WAREHOUSE_DSN` | `postgresql://dwh:dwh@localhost:5433/oilgas` | Conexión read-only al data warehouse (capa gold). En prod apunta a la base real. |
+
+- **Local sin Docker:** seteá `API_KEY` (no tiene default); el warehouse usa el default local:
+  ```bash
+  API_KEY=clave-local poetry run uvicorn app.main:app --reload
+  ```
+- **Local con Docker:** el contenedor alcanza el warehouse del host via `host.docker.internal:5433` (ya es el default en `docker-compose.yaml`).
+- **Producción:** setear `API_KEY` y `WAREHOUSE_DSN`. El valor de `WAREHOUSE_DSN` depende de dónde se despliegue el warehouse.
+
+> ⚠️ **Pendiente para prod:** el deploy (CD) todavía no inyecta `API_KEY`/`WAREHOUSE_DSN` en la instancia (hoy solo inyecta `API_IMAGE` y `SLACK_WEBHOOK_URL`). Falta sumarlas al paso de deploy + cargar los secrets, y definir dónde corre el warehouse en producción.
 
 ## CI/CD
 
@@ -197,3 +236,8 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-011 | Canal de notificaciones: Slack |
 | ADR-012 | Testing de reglas de alerta con promtool |
 | ADR-013 | Decisiones de diseño del dashboard de Grafana |
+| ADR-014 | Orquestación de datos con Airflow (DAGs como código) |
+| ADR-015 | Arquitectura medallion (bronze / silver / gold) |
+| ADR-016 | Tipo de carga (full vs incremental) |
+| ADR-017 | Modelo dimensional (esquema estrella) |
+| ADR-018 | Capa de servicio — API REST de solo lectura sobre Gold |
