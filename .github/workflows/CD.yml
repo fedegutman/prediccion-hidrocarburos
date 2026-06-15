@@ -33,6 +33,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          WAREHOUSE_DSN: ${{ secrets.WAREHOUSE_DSN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:develop"
@@ -55,11 +57,13 @@ jobs:
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout develop\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env\",
+              \"echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env\",
               \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
               \"DEPLOY_FAILED=0\",
               \"cd /app && sudo docker-compose pull || DEPLOY_FAILED=1\",
               \"if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm; cd /app && sudo docker-compose up -d || DEPLOY_FAILED=1; fi\",
-              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
+              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env; echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
             ]}" \
             --timeout-seconds 300 \
             --query "Command.CommandId" \
@@ -116,6 +120,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          WAREHOUSE_DSN: ${{ secrets.WAREHOUSE_DSN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:staging"
@@ -138,11 +144,13 @@ jobs:
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout staging\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env\",
+              \"echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env\",
               \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
               \"DEPLOY_FAILED=0\",
               \"cd /app && sudo docker-compose pull || DEPLOY_FAILED=1\",
               \"if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm; cd /app && sudo docker-compose up -d || DEPLOY_FAILED=1; fi\",
-              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
+              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env; echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
             ]}" \
             --timeout-seconds 300 \
             --query "Command.CommandId" \
@@ -199,6 +207,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          WAREHOUSE_DSN: ${{ secrets.WAREHOUSE_DSN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:main"
@@ -221,11 +231,13 @@ jobs:
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout main\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env\",
+              \"echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env\",
               \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
               \"DEPLOY_FAILED=0\",
               \"cd /app && sudo docker-compose pull || DEPLOY_FAILED=1\",
               \"if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm; cd /app && sudo docker-compose up -d || DEPLOY_FAILED=1; fi\",
-              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
+              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env; echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
             ]}" \
             --timeout-seconds 300 \
             --query "Command.CommandId" \
