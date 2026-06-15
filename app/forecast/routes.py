@@ -1,5 +1,6 @@
 """Rutas para el pronostico de produccion de pozos."""
 
+import os
 from datetime import date, timedelta
 from typing import List
 
@@ -12,7 +13,9 @@ from app.mock_data import MOCK_WELLS, MOCK_BASE_PRODUCTION, DAILY_DECLINE
 from app.metrics.business import FORECAST_REQUESTS_BY_WELL, FORECAST_DATE_RANGE_DAYS
 
 
-API_KEY = "abcdef12345"
+# La API key se toma de la variable de entorno API_KEY. El default es solo para
+# desarrollo/tests; en producción se DEBE setear API_KEY (y rotarla).
+API_KEY = os.getenv("API_KEY", "abcdef12345")
 
 router = APIRouter()
 
