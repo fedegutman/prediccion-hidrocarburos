@@ -1,0 +1,15 @@
+# Perfil de dbt para el CI. Apunta al Postgres efímero del runner (NO al warehouse
+# real), de modo que el CI no toca el profiles.yml del proyecto. Se selecciona con
+# DBT_PROFILES_DIR=ci/dbt y `dbt build --target ci`.
+oilgas:
+  target: ci
+  outputs:
+    ci:
+      type: postgres
+      host: "{{ env_var('PGHOST', 'localhost') }}"
+      port: "{{ env_var('PGPORT', '5432') | int }}"
+      user: "{{ env_var('PGUSER', 'postgres') }}"
+      password: "{{ env_var('PGPASSWORD', 'postgres') }}"
+      dbname: "{{ env_var('PGDATABASE', 'oilgas') }}"
+      schema: public
+      threads: 4

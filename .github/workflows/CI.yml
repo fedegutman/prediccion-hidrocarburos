@@ -51,8 +51,53 @@ jobs:
       - name: Test alert rules
         run: promtool test rules monitoring/prometheus/tests/alerts_test.yml
 
+  dbt-tests:
+    runs-on: ubuntu-latest
+    services:
+      warehouse:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oilgas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: oilgas
+      DBT_PROFILES_DIR: ${{ github.workspace }}/ci/dbt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Pin a 1.8.*: sin el pin, pip arrastra dbt-core 2.0 alpha (motor Fusion,
+      # que no soporta Postgres) y rompe el build.
+      - name: Install dbt
+        run: pip install "dbt-core==1.8.*" "dbt-postgres==1.8.*"
+
+      - name: Install postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Cargar fixtures en Bronze
+        run: psql "postgresql://postgres:postgres@localhost:5432/oilgas" -v ON_ERROR_STOP=1 -f ci/fixtures/bronze_seed.sql
+
+      - name: dbt build (construye Silver/Gold + corre los tests de calidad)
+        run: dbt build --project-dir data_platform/dbt/oilgas --target ci
+
   build-and-scan:
-    needs: [test, prometheus-rules]
+    needs: [test, prometheus-rules, dbt-tests]
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
