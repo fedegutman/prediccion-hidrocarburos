@@ -336,6 +336,21 @@ services:
       - metabase
     restart: on-failure
 
+  dbt-docs:
+    image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.7}
+    command: >
+      bash -c "
+        dbt docs generate --project-dir /opt/airflow/dbt/oilgas --profiles-dir /opt/airflow/dbt/oilgas &&
+        dbt docs serve --project-dir /opt/airflow/dbt/oilgas --profiles-dir /opt/airflow/dbt/oilgas --port 8082 --host 0.0.0.0 --no-browser
+      "
+    ports:
+      - "8082:8082"
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dbt:/opt/airflow/dbt
+    depends_on:
+      - warehouse
+    restart: unless-stopped
+
 volumes:
   postgres-db-volume:
   warehouse-db-volume:       # --- agregado: datos del warehouse ---
