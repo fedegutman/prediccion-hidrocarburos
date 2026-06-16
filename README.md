@@ -39,6 +39,43 @@ Documentación interactiva (Swagger): `<host>:8000/docs`
 docker compose up -d --build
 ```
 
+## Plataforma de datos (Fase 2)
+
+### Arquitectura de datos
+Arquitectura **medallion** sobre un data warehouse Postgres (`oilgas`):
+
+```
+datos.gob.ar ─(Airflow: bronze_ingesta)─▶ bronze ─(dbt)─▶ silver ─(dbt)─▶ gold ─┬─▶ API REST (/api/v1/produccion, /pozos)
+                                          (crudo)        (limpio)     (estrella) └─▶ BI (Metabase)
+```
+- **Bronze**: dato crudo de las 2 fuentes (producción + maestro de pozos), cargado por Airflow.
+- **Silver**: limpio, tipado, deduplicado (modelos dbt `stg_*`).
+- **Gold**: modelo estrella (`fct_produccion` + `dim_pozo/empresa/area/tiempo`), listo para negocio. Ver [ADR-015](adr/ADR-015-arquitectura-medallion.md) y [ADR-017](adr/ADR-017-modelo-dimensional.md).
+- **Calidad**: tests de dbt persistidos (`store_failures` → schema `dq_failures`); un test roto bloquea el deploy. Ver [ADR-019](adr/ADR-019-calidad-de-datos.md).
+
+### Levantar la plataforma de datos (local)
+```bash
+cd data_platform
+docker compose up airflow-init      # una sola vez
+docker compose up -d                # warehouse, Airflow, dbt, Metabase
+```
+- **Airflow** (orquestación): http://localhost:8080 (`airflow`/`airflow`) → correr el DAG `bronze_ingesta` para poblar Bronze; luego `dbt build` arma Silver/Gold y corre los tests.
+- **Warehouse** (Postgres): `localhost:5433` (db `oilgas`, schemas `bronze`/`silver`/`gold`).
+
+### Actualizar los workflows (DAGs)
+Los DAGs son código en `data_platform/dags/`. Editar el `.py`, commitear y volver a levantar Airflow (`docker compose up -d`) — recarga los DAGs automáticamente.
+
+### BI (Metabase)
+Dashboard "Producción de Hidrocarburos" (producción por mes, top empresas, por cuenca):
+- Local: http://localhost:3001 — se autoconfigura solo (servicio `metabase-init`), conectado al schema `gold`.
+- *(Pendiente de deploy a producción junto con la plataforma de datos.)*
+
+### Gobierno y linaje de datos
+Linaje a nivel tabla + catálogo + descripciones vía **dbt docs** (`dbt docs generate` && `dbt docs serve`). Decisión y alternativas (DataHub) en [ADR-020](adr/ADR-020-gobierno-de-datos.md).
+
+### Reprocesamiento / backfill
+Procedimiento documentado y verificable en [docs/runbooks/data-engineer.md](docs/runbooks/data-engineer.md). La carga es **idempotente**: re-correr un período no duplica.
+
 ## API
 
 Autenticación: header `X-API-Key`. El valor se configura con la env var `API_KEY` (ver sección **Configuración**); **no hay default** — si no está seteada, la API responde 503.
@@ -241,3 +278,5 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-016 | Tipo de carga (full vs incremental) |
 | ADR-017 | Modelo dimensional (esquema estrella) |
 | ADR-018 | Capa de servicio — API REST de solo lectura sobre Gold |
+| ADR-019 | Estrategia de calidad de datos (dbt tests + store_failures + gate) |
+| ADR-020 | Plataforma de gobierno y linaje (dbt docs vs DataHub) — *propuesto* |
