@@ -1,155 +1,130 @@
 # Plataforma de Datos — Fase 2
 
-Plataforma para integrar datos públicos de producción de hidrocarburos de [datos.gob.ar](https://datos.gob.ar) usando **arquitectura medallion** (Bronze → Silver → Gold).
+Pipeline de integración de datos de producción de hidrocarburos de [datos.gob.ar](https://datos.gob.ar),
+con **arquitectura medallion** (Bronze → Silver → Gold) y consumo por **API REST** y **BI (Metabase)**.
 
-> **Estado actual: Bronze.**
-> Infra levantada (Airflow + warehouse + dbt) y **ingesta a Bronze funcionando**: el DAG
-> `bronze_ingesta` baja las dos fuentes y las carga al schema `bronze`. Las capas Silver/Gold,
-> la calidad, el gobierno y el BI se construyen en las próximas etapas (ver [Próximos pasos](#próximos-pasos)).
+> **Estado: pipeline completo de punta a punta.** Extracción (Airflow) → Bronze → Silver → Gold (dbt) →
+> tests de calidad + gobierno (dbt docs) + BI (Metabase). Las decisiones clave están en los ADRs `014`–`021`.
 
-## Qué está montado hoy
+## Componentes
 
 | Componente | Herramienta | Rol |
 |------------|-------------|-----|
-| Orquestación | Apache Airflow 3.1.7 (CeleryExecutor) | Correr los workflows (DAGs) |
-| Warehouse | PostgreSQL 16 | Aloja los schemas `bronze` / `silver` / `gold` (hoy vacíos) |
-| Transformación | dbt 1.8 (adapter postgres) | Transformará Silver/Gold; ya conecta al warehouse |
+| Orquestación | Apache Airflow 3.1.7 (CeleryExecutor) | Corre los DAGs (`bronze_ingesta`, `dbt_transform`) |
+| Warehouse | PostgreSQL 16 | Aloja los schemas `bronze` / `silver` / `gold` |
+| Transformación | dbt 1.8 (adapter postgres) | Construye Silver/Gold y corre los tests de calidad |
+| BI | Metabase | Dashboards para usuarios no técnicos (sobre `gold`) |
+| Gobierno / linaje | dbt docs + Airflow UI | Catálogo, linaje a nivel tabla, workflows y última actualización |
 
-Los tres schemas medallion ya existen en el warehouse:
+Las tres capas medallion (schemas del warehouse):
 
-| Schema | Propósito (cuando tenga datos) |
-|--------|--------------------------------|
-| `bronze` | Dato crudo tal cual viene de la fuente (inmutable) |
-| `silver` | Dato limpio, tipado, deduplicado |
-| `gold` | Modelo estrella (fact + dimensiones), listo para negocio |
+| Schema | Contenido |
+|--------|-----------|
+| `bronze` | Dato crudo de las 2 fuentes, tal cual viene (inmutable) |
+| `silver` | Limpio, tipado, deduplicado — modelos dbt `stg_*` (vistas) |
+| `gold` | Modelo estrella `fct_produccion` + `dim_pozo/empresa/area/tiempo` (tablas) |
+| `dq_failures` | Filas que fallan un test de calidad (persistidas, ver ADR-019) |
 
-> Hay **dos Postgres**: `postgres` es la base interna de Airflow (metadatos de orquestación);
-> `warehouse` es el data warehouse del proyecto. Están separados a propósito.
+> ℹ️ Hay **dos Postgres**: `postgres` es la base interna de Airflow (metadatos); `warehouse` es el data
+> warehouse del proyecto. Separados a propósito.
 
 ## Requisitos
 
 - Docker y Docker Compose
-- ~4 GB de RAM libres para Docker
+- ~6 GB de RAM libres para Docker (Airflow + warehouse + Metabase + dbt docs)
 
 ## Levantar el stack
 
 ```bash
 cd data_platform
-
 docker compose up airflow-init     # setup inicial (una sola vez)
-docker compose up -d               # levanta todos los servicios
-
-docker compose ps                  # ver estado (esperar a que estén "healthy")
-docker compose down                # apagar (mantiene los datos)
-docker compose down -v             # apagar y BORRAR los datos (volúmenes)
+docker compose up -d               # Airflow + warehouse + Metabase + dbt docs
+docker compose ps                  # esperar a que estén "healthy"
+docker compose down                # apagar (mantiene los datos); -v para borrarlos
 ```
 
-La primera vez tarda varios minutos: descarga imágenes e instala dbt dentro de los contenedores
-de Airflow (ver `_PIP_ADDITIONAL_REQUIREMENTS` en `.env`).
+La primera vez tarda varios minutos: descarga imágenes e instala dbt dentro de los contenedores de Airflow
+(ver `_PIP_ADDITIONAL_REQUIREMENTS` en `.env`).
 
 ## Accesos
 
 | Servicio | URL / conexión | Credenciales |
 |----------|----------------|--------------|
-| Airflow (UI) | http://localhost:8080 | `airflow` / `airflow` |
-| Warehouse (desde tu máquina) | `localhost:5433`, db `oilgas` | `dwh` / `dwh` |
+| Airflow (orquestación + workflows) | http://localhost:8080 | `airflow` / `airflow` |
+| Metabase (BI) | http://localhost:3001 | `admin@oilgas.com` / `Admin1234!` |
+| dbt docs (catálogo + linaje) | http://localhost:8082 | — |
+| Warehouse (Postgres) | `localhost:5433`, db `oilgas` | `dwh` / `dwh` |
+
+## Correr el pipeline
+
+1. **Ingesta → Bronze:** en Airflow, activar y disparar el DAG **`bronze_ingesta`** (baja las 2 fuentes).
+   ```bash
+   docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta
+   # backfill de un rango puntual:
+   docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta \
+     --conf '{"date_from":"2020-01-01","date_to":"2020-12-31"}'
+   ```
+2. **Transformar → Silver/Gold + tests:** el DAG **`dbt_transform`** corre `dbt build` al terminar la ingesta.
+   También se puede a mano:
+   ```bash
+   docker compose exec airflow-scheduler dbt build --project-dir /opt/airflow/dbt/oilgas
+   ```
+
+## DAGs
+
+| DAG | Qué hace | Propiedades |
+|-----|----------|-------------|
+| `bronze_ingesta` | Baja producción (merge por período) + maestro de pozos (full) a `bronze` | idempotente, retries con backoff, parametrizado por fecha (backfill) |
+| `dbt_transform` | `dbt build` → Silver/Gold + tests; espera a que termine la ingesta | retries con backoff |
+
+## Calidad de datos (ADR-019)
+
+Tests de dbt (`not_null`, `unique`, `relationships`, `accepted_values` + tests singulares: grano único,
+no-negatividad, rango de año). Cubren ≥3 dimensiones (completitud, validez, unicidad, integridad referencial,
+schema). Las filas que fallan se **persisten** en el schema `dq_failures` (`store_failures`), y un test
+estructural roto **bloquea el deploy** vía el job `dbt-tests` del CI.
+
+## Gobierno y BI
+
+- **Gobierno / linaje** → **dbt docs** (`http://localhost:8082`): catálogo de modelos, descripciones y linaje
+  Bronze→Silver→Gold a nivel tabla. Workflows y última actualización → **Airflow UI**. (Decisión vs. DataHub en ADR-020.)
+- **BI** → **Metabase** (`http://localhost:3001`): dashboard "Producción de Hidrocarburos" (por mes, por empresa,
+  por cuenca), autoconfigurado por el servicio `metabase-init` contra el schema `gold`.
+
+## Actualizar los workflows (DAGs)
+
+Los DAGs son archivos Python en `dags/`. Al guardarlos, el `dag-processor` de Airflow los detecta
+automáticamente (puede tardar unos segundos en la UI). No hace falta reiniciar.
 
 ## Estructura
 
 ```
 data_platform/
-├── docker-compose.yaml        # Airflow + warehouse + dbt
-├── .env                       # AIRFLOW_UID y librerías a instalar
-├── dags/                      # DAGs de Airflow (workflows)
-│   ├── bronze_ingesta.py      #   DAG de ingesta a Bronze
-│   └── bronze_lib.py          #   helpers de descarga + carga al warehouse
-├── warehouse/init/            # SQL de inicialización (schemas medallion)
-└── dbt/oilgas/                # proyecto dbt
-    ├── dbt_project.yml
-    ├── profiles.yml           # conexión al warehouse
-    └── macros/
+├── docker-compose.yaml         # Airflow + warehouse + Metabase + dbt docs
+├── .env                        # AIRFLOW_UID y librerías a instalar (dbt, pandas, requests)
+├── dags/
+│   ├── bronze_ingesta.py       #   DAG de ingesta a Bronze
+│   ├── bronze_lib.py           #   helpers de descarga + carga al warehouse
+│   └── dbt_transform.py        #   DAG que corre dbt build (Silver/Gold + tests)
+├── warehouse/init/             # SQL de inicialización (schemas medallion)
+├── metabase/setup_metabase.py  # autoconfiguración de Metabase (usuario, conexión, dashboards)
+└── dbt/oilgas/                 # proyecto dbt
+    ├── dbt_project.yml          #   schemas + store_failures + persist_docs
+    ├── profiles.yml             #   conexión al warehouse
+    ├── models/silver/           #   stg_produccion, stg_pozos (+ tests en _*.yml)
+    ├── models/gold/             #   fct_produccion, dim_* (+ tests en _gold_models.yml)
+    ├── tests/                   #   tests singulares (assert_*, completitud)
+    └── macros/                  #   generate_schema_name (schemas medallion limpios)
 ```
 
-## Trabajar con dbt
+## En producción
 
-dbt corre dentro de los contenedores de Airflow y transforma en el `warehouse`:
+Corren la **API REST** + un **warehouse `gold` colocado** en la misma EC2 (Postgres magro, ver ADR-021).
+El **pipeline (Airflow + dbt)** y el **BI (Metabase)** corren **en local** y se demuestran en el video —
+no se despliegan a la nube por el límite de RAM de las instancias t2.micro.
 
-```bash
-docker compose exec airflow-scheduler dbt debug --project-dir /opt/airflow/dbt/oilgas
-docker compose exec airflow-scheduler dbt run   --project-dir /opt/airflow/dbt/oilgas
-docker compose exec airflow-scheduler dbt test  --project-dir /opt/airflow/dbt/oilgas
-```
+## Decisiones (ADRs)
 
-## Actualizar los workflows (DAGs)
-
-Los DAGs son archivos Python en `dags/`. Al guardarlos, el `dag-processor` de Airflow los detecta
-automáticamente (puede tardar unos segundos en aparecer/actualizarse en la UI). No hace falta reiniciar.
-
-## Ingesta a Bronze (DAG `bronze_ingesta`)
-
-Baja las dos fuentes de datos.gob.ar y las aterriza crudas en el schema `bronze`:
-
-| Fuente | Tabla destino | Tipo de carga |
-|--------|---------------|---------------|
-| Producción de pozos no convencional | `bronze.produccion` | Incremental, merge/upsert por período `(anio, mes)` |
-| Listado de pozos por operadora | `bronze.pozos` | Full (reemplazo del snapshot) |
-
-Está **parametrizado por rango de fechas** (`date_from` / `date_to`), lo que permite reprocesar un
-período puntual (backfill). Por defecto carga la ventana **2023–2024** para que la demo sea rápida.
-La carga de producción es **idempotente**: reejecutar el mismo rango no duplica datos. Ver `adr/ADR-016`.
-
-```bash
-# disparar con los parámetros por defecto (2023–2024)
-docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta
-
-# disparar un rango específico (backfill)
-docker compose exec airflow-scheduler airflow dags trigger bronze_ingesta \
-  --conf '{"date_from": "2020-01-01", "date_to": "2020-12-31"}'
-```
-
-También se puede disparar desde la UI (http://localhost:8080).
-
-## Capa Silver (dbt)
-
-Modelos de limpieza/tipado sobre Bronze, materializados como **vistas** en el schema `silver`:
-
-| Modelo | Origen | Grano |
-|--------|--------|-------|
-| `stg_produccion` | `bronze.produccion` | idpozo × anio × mes |
-| `stg_pozos` | `bronze.pozos` | idpozo |
-
-Tienen tests de calidad de dbt (`not_null`, `accepted_values`, `unique` + un test singular de unicidad de grano). Para construir/testear:
-
-```bash
-docker compose exec airflow-scheduler dbt run  --project-dir /opt/airflow/dbt/oilgas --select silver
-docker compose exec airflow-scheduler dbt test --project-dir /opt/airflow/dbt/oilgas --select silver
-```
-
-## Capa Gold — modelo estrella (dbt)
-
-Modelo dimensional materializado como **tablas** en el schema `gold` (ver `adr/ADR-017`):
-
-| Modelo | Tipo | Grano |
-|--------|------|-------|
-| `fct_produccion` | fact | idpozo × anio × mes |
-| `dim_pozo` | dimensión | idpozo |
-| `dim_empresa` | dimensión | empresa operadora |
-| `dim_area` | dimensión | área/yacimiento, cuenca, provincia |
-| `dim_tiempo` | dimensión | mes |
-
-Surrogate keys por hash (`md5` de la clave natural); SCD Type 1. Tests `relationships` garantizan integridad referencial fact↔dim.
-
-```bash
-docker compose exec airflow-scheduler dbt build --project-dir /opt/airflow/dbt/oilgas --select gold
-```
-
-## Próximos pasos
-
-Lo que todavía falta construir:
-
-- **Etapa 4** — Calidad de datos con consecuencia operativa.
-- **Etapa 5** — Backfill / reproceso por fecha.
-- **Etapa 6** — Gobierno y lineage (DataHub).
-- **Etapa 7** — BI con Metabase (dashboards para usuarios no técnicos).
-
-Nota: La idea es ir actualizando este README a medida que avanzamos.
+`014` orquestación · `015` medallion · `016` tipo de carga · `017` modelo dimensional ·
+`018` API sobre Gold · `019` calidad · `020` gobierno · `021` topología del warehouse en prod.
+Todos en [`../adr/`](../adr/), con comparación de alternativas.
