@@ -71,7 +71,7 @@ Los DAGs son código en `data_platform/dags/`. Editar el `.py`, commitear y volv
 ### BI (Metabase)
 Dashboard "Producción de Hidrocarburos" (producción por mes, top empresas, por cuenca):
 - Local: http://localhost:3001 — se autoconfigura solo (servicio `metabase-init`), conectado al schema `gold`.
-- *(Pendiente de deploy a producción junto con la plataforma de datos.)*
+- En producción **corre solo en local** por decisión de costo/recursos (ver [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md)); se demuestra en el video.
 
 ### Gobierno y linaje de datos
 - **Linaje a nivel tabla + catálogo + descripciones** → **dbt docs** (`dbt docs generate` && `dbt docs serve`).
@@ -168,7 +168,7 @@ El pipeline está dividido en dos workflows de GitHub Actions:
 | `deploy-staging` | CI exitoso en `staging` | Deploy a EC2 `tp-staging` via AWS SSM |
 | `deploy-prod` | CI exitoso en `main` | Deploy a EC2 `tp-production` via AWS SSM |
 
-El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`, `API_KEY`, `WAREHOUSE_DSN`) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
+El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`, `API_KEY`, `WAREHOUSE_DSN`), configura un **swapfile de 1 GB** (idempotente, por el RAM ajustado de la t2.micro — ver [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md)) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
 
 Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
 
