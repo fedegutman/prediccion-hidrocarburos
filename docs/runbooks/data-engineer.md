@@ -33,6 +33,15 @@ y `gold`, o aviso de rectificación en la fuente. No es programado: se corre **a
 - **Grano único** (sin duplicados): lo cubre `assert_produccion_grano_unico`.
 - Spot-check vía API: `GET /api/v1/produccion?anio=2024` devuelve los valores corregidos.
 
+## Refresco del `gold` en producción
+
+En este TP la plataforma de datos (Airflow + dbt) corre **en local**; el warehouse de **producción** es un contenedor colocado en la EC2 cuyo `gold` es una **copia cargada por `pg_dump`/restore** (ver [ADR-021](../../adr/ADR-021-topologia-warehouse-produccion.md)). Por eso un backfill **no se propaga solo** a prod. Para reflejar el dato corregido en producción:
+
+1. Correr el backfill local (pasos de arriba) hasta que `gold` quede correcto en el warehouse local.
+2. `pg_dump` del schema `gold` local → archivo.
+3. Subir el dump a S3 y, por SSM, restaurarlo dentro del contenedor `warehouse` de la instancia (`docker exec ... psql`).
+4. Verificar vía API en prod: `GET /api/v1/produccion?anio=...` devuelve el dato corregido.
+
 ## Si algo falla
 - **Tests de calidad en rojo:** NO promover. Revisar `dq_failures`, corregir la transformación o el dato de origen, y re-correr. El gate (CI / DAG) impide que el dato malo avance.
 - **Carga a medias / error de conexión:** la idempotencia permite **re-correr** sin efectos colaterales (no se duplica).

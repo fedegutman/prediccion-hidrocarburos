@@ -1,4 +1,4 @@
-# ADR-019: Plataforma de gobierno de datos
+# ADR-020: Plataforma de gobierno de datos
 
 **Fecha**: 2026-06-15
 **Estado**: Aceptado

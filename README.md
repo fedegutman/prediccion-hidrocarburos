@@ -25,6 +25,7 @@ Documentación interactiva (Swagger): `<host>:8000/docs`
 | Grafana | 3000 | Dashboard de monitoreo |
 | Alertmanager | 9093 | Routing de alertas a Slack |
 | node-exporter | 9100 | Métricas del host |
+| warehouse | interno | Postgres — data warehouse (capa gold) que sirve la API en prod |
 
 ## Requisitos (ejecución local)
 
@@ -53,6 +54,8 @@ datos.gob.ar ─(Airflow: bronze_ingesta)─▶ bronze ─(dbt)─▶ silver ─
 - **Gold**: modelo estrella (`fct_produccion` + `dim_pozo/empresa/area/tiempo`), listo para negocio. Ver [ADR-015](adr/ADR-015-arquitectura-medallion.md) y [ADR-017](adr/ADR-017-modelo-dimensional.md).
 - **Calidad**: tests de dbt persistidos (`store_failures` → schema `dq_failures`); un test roto bloquea el deploy. Ver [ADR-019](adr/ADR-019-calidad-de-datos.md).
 
+> **En producción:** corren la **API** + un **warehouse `gold` colocado** en la EC2. El pipeline (Airflow + dbt) y el **BI (Metabase)** corren **en local** (se demuestran en el video). Topología y alternativas en [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
+
 ### Levantar la plataforma de datos (local)
 ```bash
 cd data_platform
@@ -71,7 +74,10 @@ Dashboard "Producción de Hidrocarburos" (producción por mes, top empresas, por
 - *(Pendiente de deploy a producción junto con la plataforma de datos.)*
 
 ### Gobierno y linaje de datos
-Linaje a nivel tabla + catálogo + descripciones vía **dbt docs** (`dbt docs generate` && `dbt docs serve`). Decisión y alternativas (DataHub) en [ADR-020](adr/ADR-020-gobierno-de-datos.md).
+- **Linaje a nivel tabla + catálogo + descripciones** → **dbt docs** (`dbt docs generate` && `dbt docs serve`).
+- **Workflows de extracción + última actualización de los datos** → **Airflow UI** (`localhost:8080`): DAGs, historial de runs y último run exitoso de cada uno.
+
+Decisión y alternativas (DataHub) en [ADR-020](adr/ADR-020-gobierno-de-datos.md).
 
 ### Reprocesamiento / backfill
 Procedimiento documentado y verificable en [docs/runbooks/data-engineer.md](docs/runbooks/data-engineer.md). La carga es **idempotente**: re-correr un período no duplica.
@@ -139,7 +145,7 @@ La API se configura por variables de entorno, con defaults solo para desarrollo.
 - **Local con Docker:** el contenedor alcanza el warehouse del host via `host.docker.internal:5433` (ya es el default en `docker-compose.yaml`).
 - **Producción:** setear `API_KEY` y `WAREHOUSE_DSN`. El valor de `WAREHOUSE_DSN` depende de dónde se despliegue el warehouse.
 
-> ⚠️ **Pendiente para prod:** el deploy (CD) todavía no inyecta `API_KEY`/`WAREHOUSE_DSN` en la instancia (hoy solo inyecta `API_IMAGE` y `SLACK_WEBHOOK_URL`). Falta sumarlas al paso de deploy + cargar los secrets, y definir dónde corre el warehouse en producción.
+> **Warehouse en producción:** corre como **contenedor `postgres:16` colocado** en la misma EC2 (en el `docker-compose` que despliega el CD), con config magra + `mem_limit` y un **swapfile** por el RAM de la t2.micro. El puerto no se expone: solo lo alcanza la API por la red interna. El `gold` se carga por **dump/restore** desde el pipeline (que corre local). Topología y alternativas en [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
 
 ## CI/CD
 
@@ -162,13 +168,13 @@ El pipeline está dividido en dos workflows de GitHub Actions:
 | `deploy-staging` | CI exitoso en `staging` | Deploy a EC2 `tp-staging` via AWS SSM |
 | `deploy-prod` | CI exitoso en `main` | Deploy a EC2 `tp-production` via AWS SSM |
 
-El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
+El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`, `API_KEY`, `WAREHOUSE_DSN`) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
 
 Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
 
 ### Secrets de GitHub Actions
 
-El pipeline requiere estos cuatro secrets (Settings → Secrets and variables → Actions). Los dos ARN salen de la infraestructura (`infra/terraform`, ver `terraform output`).
+El pipeline requiere estos secrets (Settings → Secrets and variables → Actions). Los dos ARN salen de la infraestructura (`infra/terraform`, ver `terraform output`).
 
 | Secret | Usado por | Para qué sirve |
 |--------|-----------|----------------|
@@ -176,6 +182,8 @@ El pipeline requiere estos cuatro secrets (Settings → Secrets and variables �
 | `AWS_CD_ROLE_ARN` | CD (`deploy-*`) | ARN del rol `InstanceCDRole`. GitHub Actions lo asume via OIDC para ejecutar el deploy en las EC2 via SSM. |
 | `SLACK_WEBHOOK_URL` | CD | Incoming Webhook de Slack. Se inyecta en el `.env` de la instancia para que Alertmanager envíe las alertas al canal. |
 | `GH_TOKEN` | CD | Personal Access Token con scope `repo`. El script de deploy lo usa para clonar el repositorio (privado) dentro de la instancia. |
+| `API_KEY` | CD | Clave del header `X-API-Key`. El deploy la inyecta en el `.env` de la instancia (la API responde 503 si falta). |
+| `WAREHOUSE_DSN` | CD | DSN read-only al data warehouse (capa gold). El deploy lo inyecta en el `.env`; su valor depende de dónde corra el warehouse en prod. |
 
 ## Monitoreo
 
@@ -227,9 +235,18 @@ Cobertura actual: 100%
 ├── app/
 │   ├── main.py
 │   ├── forecast/routes.py
-│   ├── wells/routes.py
+│   ├── wells/routes.py        # deprecado (mock Fase 1)
+│   ├── pozos/routes.py        # API sobre gold
+│   ├── produccion/routes.py   # API sobre gold
+│   ├── db.py                  # acceso read-only al warehouse
 │   ├── metrics/
 │   └── limiter.py
+├── data_platform/             # plataforma de datos (Fase 2)
+│   ├── dags/                  # DAGs de Airflow (bronze_ingesta, dbt_transform)
+│   ├── dbt/oilgas/            # modelos dbt (silver/gold) + tests + dbt docs
+│   ├── metabase/              # setup del BI
+│   └── docker-compose.yaml
+├── docs/runbooks/             # runbooks por rol (data-engineer, data-analyst)
 ├── monitoring/
 │   ├── prometheus/
 │   │   ├── prometheus.yml
@@ -279,4 +296,5 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-017 | Modelo dimensional (esquema estrella) |
 | ADR-018 | Capa de servicio — API REST de solo lectura sobre Gold |
 | ADR-019 | Estrategia de calidad de datos (dbt tests + store_failures + gate) |
-| ADR-020 | Plataforma de gobierno y linaje (dbt docs vs DataHub) — *propuesto* |
+| ADR-020 | Plataforma de gobierno y linaje (dbt docs + Airflow vs DataHub) |
+| ADR-021 | Topología del warehouse en producción (contenedor colocado en EC2) |
