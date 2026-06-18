@@ -1,4 +1,4 @@
-# ADR-003: Routing de alertas con Prometheus Alertmanager
+# ADR-010: Routing de alertas con Prometheus Alertmanager
 
 **Fecha**: 2026-04-15
 **Estado**: Aceptado

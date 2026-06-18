@@ -1,4 +1,4 @@
-# ADR-NNN: Testing de reglas de alerta con promtool
+# ADR-012: Testing de reglas de alerta con promtool
 
 **Fecha**: 2026-04-16
 **Estado**: Aceptado

@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: "Datos crudos cargados por Airflow desde datos.gob.ar (capa Bronze)."
+    tables:
+      - name: produccion
+        description: "Producción mensual de pozos no convencionales. Grano: idpozo × anio × mes."
+      - name: pozos
+        description: "Listado maestro de pozos cargados por operadoras. Grano: idpozo."

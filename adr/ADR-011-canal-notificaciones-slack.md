@@ -1,4 +1,4 @@
-# ADR-NNN: Canal de notificaciones: Slack
+# ADR-011: Canal de notificaciones: Slack
 
 **Fecha**: 2026-04-15
 **Estado**: Aceptado

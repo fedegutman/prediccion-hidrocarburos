@@ -22,7 +22,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -33,6 +33,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          WAREHOUSE_DSN: ${{ secrets.WAREHOUSE_DSN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:develop"
@@ -46,18 +48,25 @@ jobs:
               \"sudo yum install git -y\",
               \"sudo systemctl enable docker\",
               \"sudo systemctl start docker\",
-              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
-              \"sudo chmod +x /usr/local/bin/docker-compose\",
+              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/bin/docker-compose\",
+              \"sudo chmod +x /usr/bin/docker-compose\",
+              \"if ! sudo swapon --show | grep -q /swapfile; then sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile; grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab; fi; true\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"PREVIOUS_IMAGE=\$(sudo grep '^API_IMAGE=' /app/.env 2>/dev/null | cut -d= -f2- || true)\",
+              \"ROLLBACK_IMAGE='$IMAGE_URI-rollback'\",
+              \"if [ -n \\\"\$PREVIOUS_IMAGE\\\" ] && sudo docker image inspect \\\"\$PREVIOUS_IMAGE\\\" >/dev/null 2>&1; then sudo docker tag \\\"\$PREVIOUS_IMAGE\\\" \\\"\$ROLLBACK_IMAGE\\\"; else ROLLBACK_IMAGE=''; fi\",
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout develop\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env\",
+              \"echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env\",
               \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
-              \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
-              \"cd /app && sudo docker-compose pull\",
-              \"cd /app && sudo docker-compose up -d\"
+              \"DEPLOY_FAILED=0\",
+              \"cd /app && sudo docker-compose pull || DEPLOY_FAILED=1\",
+              \"if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm; cd /app && sudo docker-compose up -d || DEPLOY_FAILED=1; fi\",
+              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env; echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
             ]}" \
-            --timeout-seconds 180 \
+            --timeout-seconds 300 \
             --query "Command.CommandId" \
             --output text)
 
@@ -101,7 +110,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -112,6 +121,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          WAREHOUSE_DSN: ${{ secrets.WAREHOUSE_DSN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:staging"
@@ -125,18 +136,25 @@ jobs:
               \"sudo yum install git -y\",
               \"sudo systemctl enable docker\",
               \"sudo systemctl start docker\",
-              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
-              \"sudo chmod +x /usr/local/bin/docker-compose\",
+              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/bin/docker-compose\",
+              \"sudo chmod +x /usr/bin/docker-compose\",
+              \"if ! sudo swapon --show | grep -q /swapfile; then sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile; grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab; fi; true\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"PREVIOUS_IMAGE=\$(sudo grep '^API_IMAGE=' /app/.env 2>/dev/null | cut -d= -f2- || true)\",
+              \"ROLLBACK_IMAGE='$IMAGE_URI-rollback'\",
+              \"if [ -n \\\"\$PREVIOUS_IMAGE\\\" ] && sudo docker image inspect \\\"\$PREVIOUS_IMAGE\\\" >/dev/null 2>&1; then sudo docker tag \\\"\$PREVIOUS_IMAGE\\\" \\\"\$ROLLBACK_IMAGE\\\"; else ROLLBACK_IMAGE=''; fi\",
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout staging\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env\",
+              \"echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env\",
               \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
-              \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
-              \"cd /app && sudo docker-compose pull\",
-              \"cd /app && sudo docker-compose up -d\"
+              \"DEPLOY_FAILED=0\",
+              \"cd /app && sudo docker-compose pull || DEPLOY_FAILED=1\",
+              \"if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm; cd /app && sudo docker-compose up -d || DEPLOY_FAILED=1; fi\",
+              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env; echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
             ]}" \
-            --timeout-seconds 180 \
+            --timeout-seconds 300 \
             --query "Command.CommandId" \
             --output text)
 
@@ -180,7 +198,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -191,6 +209,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          WAREHOUSE_DSN: ${{ secrets.WAREHOUSE_DSN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:main"
@@ -204,18 +224,25 @@ jobs:
               \"sudo yum install git -y\",
               \"sudo systemctl enable docker\",
               \"sudo systemctl start docker\",
-              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose\",
-              \"sudo chmod +x /usr/local/bin/docker-compose\",
+              \"sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64 -o /usr/bin/docker-compose\",
+              \"sudo chmod +x /usr/bin/docker-compose\",
+              \"if ! sudo swapon --show | grep -q /swapfile; then sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile; grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab; fi; true\",
               \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"PREVIOUS_IMAGE=\$(sudo grep '^API_IMAGE=' /app/.env 2>/dev/null | cut -d= -f2- || true)\",
+              \"ROLLBACK_IMAGE='$IMAGE_URI-rollback'\",
+              \"if [ -n \\\"\$PREVIOUS_IMAGE\\\" ] && sudo docker image inspect \\\"\$PREVIOUS_IMAGE\\\" >/dev/null 2>&1; then sudo docker tag \\\"\$PREVIOUS_IMAGE\\\" \\\"\$ROLLBACK_IMAGE\\\"; else ROLLBACK_IMAGE=''; fi\",
               \"sudo rm -rf /app && sudo git clone https://$GH_TOKEN@github.com/fedegutman/tp-software.git /app && sudo git -C /app checkout main\",
               \"echo 'API_IMAGE=$IMAGE_URI' | sudo tee /app/.env\",
               \"echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env\",
+              \"echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env\",
+              \"echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env\",
               \"sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml\",
-              \"sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm\",
-              \"cd /app && sudo docker-compose pull\",
-              \"cd /app && sudo docker-compose up -d\"
+              \"DEPLOY_FAILED=0\",
+              \"cd /app && sudo docker-compose pull || DEPLOY_FAILED=1\",
+              \"if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then sudo docker ps -q | xargs -r sudo docker stop; sudo docker ps -aq | xargs -r sudo docker rm; cd /app && sudo docker-compose up -d || DEPLOY_FAILED=1; fi\",
+              \"HEALTH_OK=0; if [ \\\"\$DEPLOY_FAILED\\\" = \\\"0\\\" ]; then for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do if curl -fsS http://localhost:8000/health >/dev/null; then HEALTH_OK=1; break; fi; sleep 5; done; fi; if [ \\\"\$HEALTH_OK\\\" = \\\"1\\\" ]; then echo 'Health check OK'; else echo 'Deploy o health check fallido - iniciando rollback'; if [ -n \\\"\$ROLLBACK_IMAGE\\\" ]; then echo \\\"API_IMAGE=\$ROLLBACK_IMAGE\\\" | sudo tee /app/.env; echo 'SLACK_WEBHOOK_URL=$SLACK_WEBHOOK_URL' | sudo tee -a /app/.env; echo 'API_KEY=$API_KEY' | sudo tee -a /app/.env; echo 'WAREHOUSE_DSN=$WAREHOUSE_DSN' | sudo tee -a /app/.env; sudo sed 's|[$]{SLACK_WEBHOOK_URL}|$SLACK_WEBHOOK_URL|g' /app/monitoring/alertmanager/alertmanager.yml.template | sudo tee /app/monitoring/alertmanager/alertmanager.yml; cd /app && sudo docker-compose up -d; else echo 'No hay imagen anterior disponible para rollback'; fi; exit 1; fi\"
             ]}" \
-            --timeout-seconds 180 \
+            --timeout-seconds 300 \
             --query "Command.CommandId" \
             --output text)
 

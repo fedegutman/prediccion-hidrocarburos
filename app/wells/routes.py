@@ -26,8 +26,13 @@ class WellInfo(BaseModel):
 @router.get(
     "/wells",
     response_model=List[WellInfo],
-    summary="Listado de pozos activos",
+    summary="Listado de pozos activos (mock, legacy — usar /pozos)",
+    deprecated=True,
     description="""
+**DEPRECADO (Fase 1, datos mock).** Usá `GET /api/v1/pozos`, que devuelve los
+pozos reales del data warehouse (capa gold). Este endpoint se mantiene solo por
+compatibilidad.
+
 Retorna el listado de pozos activos para una fecha dada.
 
 **Parámetros:**

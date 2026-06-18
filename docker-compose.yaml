@@ -5,6 +5,11 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      # API key: se pasa desde el entorno/secret (sin default). Si falta, la API rechaza todo.
+      - API_KEY=${API_KEY}
+      # Conexión al warehouse (gold). En contenedor, el warehouse del host se alcanza
+      # via host.docker.internal (Docker Desktop). En prod se sobreescribe con el secret.
+      - WAREHOUSE_DSN=${WAREHOUSE_DSN:-postgresql://dwh:dwh@host.docker.internal:5433/oilgas}
     restart: unless-stopped
 
   alertmanager:
@@ -66,6 +71,32 @@ services:
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
     restart: unless-stopped
 
+  # Warehouse (capa gold) para servir la API en prod. Magro a propósito: la t2.micro
+  # tiene 1 GB, así que shared_buffers/work_mem chicos + mem_limit para no ahogar al resto.
+  # SIN "ports": no se expone público; solo lo alcanza la API por la red interna (host "warehouse").
+  # La carga del gold se hace por "docker exec" desde la instancia (no por red expuesta).
+  warehouse:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=dwh
+      - POSTGRES_PASSWORD=${WAREHOUSE_PASSWORD:-dwh}
+      - POSTGRES_DB=oilgas
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=20
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+    mem_limit: 320m
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
   grafana-data:
+  warehouse-data:

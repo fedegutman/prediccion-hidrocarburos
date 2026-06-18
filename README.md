@@ -8,9 +8,11 @@ Sistema para pronosticar producción de hidrocarburos por pozo. Fase 1: servicio
 
 | Ambiente | API | Grafana | Prometheus |
 |----------|-----|---------|------------|
-| Producción | http://18.188.153.25:8000 | http://18.188.153.25:3000 | http://18.188.153.25:9090 |
-| Staging | http://18.118.110.92:8000 | http://18.118.110.92:3000 | http://18.118.110.92:9090 |
-| Desarrollo | http://3.142.209.241:8000 | http://3.142.209.241:3000 | http://3.142.209.241:9090 |
+| Producción | http://3.144.71.244:8000 | http://3.144.71.244:3000 | http://3.144.71.244:9090 |
+| Staging | http://52.14.130.77:8000 | http://52.14.130.77:3000 | http://52.14.130.77:9090 |
+| Desarrollo | http://18.222.31.105:8000 | http://18.222.31.105:3000 | http://18.222.31.105:9090 |
+
+> Las IPs son públicas dinámicas: cambian si se apagan y vuelven a prender las instancias. Para refrescarlas: `cd infra/terraform && terraform output instance_public_ips`.
 
 Documentación interactiva (Swagger): `<host>:8000/docs`
 
@@ -23,6 +25,7 @@ Documentación interactiva (Swagger): `<host>:8000/docs`
 | Grafana | 3000 | Dashboard de monitoreo |
 | Alertmanager | 9093 | Routing de alertas a Slack |
 | node-exporter | 9100 | Métricas del host |
+| warehouse | interno | Postgres — data warehouse (capa gold) que sirve la API en prod |
 
 ## Requisitos (ejecución local)
 
@@ -37,9 +40,51 @@ Documentación interactiva (Swagger): `<host>:8000/docs`
 docker compose up -d --build
 ```
 
+## Plataforma de datos (Fase 2)
+
+### Arquitectura de datos
+Arquitectura **medallion** sobre un data warehouse Postgres (`oilgas`):
+
+```
+datos.gob.ar ─(Airflow: bronze_ingesta)─▶ bronze ─(dbt)─▶ silver ─(dbt)─▶ gold ─┬─▶ API REST (/api/v1/produccion, /pozos)
+                                          (crudo)        (limpio)     (estrella) └─▶ BI (Metabase)
+```
+- **Bronze**: dato crudo de las 2 fuentes (producción + maestro de pozos), cargado por Airflow.
+- **Silver**: limpio, tipado, deduplicado (modelos dbt `stg_*`).
+- **Gold**: modelo estrella (`fct_produccion` + `dim_pozo/empresa/area/tiempo`), listo para negocio. Ver [ADR-015](adr/ADR-015-arquitectura-medallion.md) y [ADR-017](adr/ADR-017-modelo-dimensional.md).
+- **Calidad**: tests de dbt persistidos (`store_failures` → schema `dq_failures`); un test roto bloquea el deploy. Ver [ADR-019](adr/ADR-019-calidad-de-datos.md).
+
+> **En producción:** corren la **API** + un **warehouse `gold` colocado** en la EC2. El pipeline (Airflow + dbt) y el **BI (Metabase)** corren **en local** (se demuestran en el video). Topología y alternativas en [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
+
+### Levantar la plataforma de datos (local)
+```bash
+cd data_platform
+docker compose up airflow-init      # una sola vez
+docker compose up -d                # warehouse, Airflow, dbt, Metabase
+```
+- **Airflow** (orquestación): http://localhost:8080 (`airflow`/`airflow`) → correr el DAG `bronze_ingesta` para poblar Bronze; luego `dbt build` arma Silver/Gold y corre los tests.
+- **Warehouse** (Postgres): `localhost:5433` (db `oilgas`, schemas `bronze`/`silver`/`gold`).
+
+### Actualizar los workflows (DAGs)
+Los DAGs son código en `data_platform/dags/`. Editar el `.py`, commitear y volver a levantar Airflow (`docker compose up -d`) — recarga los DAGs automáticamente.
+
+### BI (Metabase)
+Dashboard "Producción de Hidrocarburos" (producción por mes, top empresas, por cuenca):
+- Local: http://localhost:3001 — se autoconfigura solo (servicio `metabase-init`), conectado al schema `gold`.
+- En producción **corre solo en local** por decisión de costo/recursos (ver [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md)); se demuestra en el video.
+
+### Gobierno y linaje de datos
+- **Linaje a nivel tabla + catálogo + descripciones** → **dbt docs** (`dbt docs generate` && `dbt docs serve`).
+- **Workflows de extracción + última actualización de los datos** → **Airflow UI** (`localhost:8080`): DAGs, historial de runs y último run exitoso de cada uno.
+
+Decisión y alternativas (DataHub) en [ADR-020](adr/ADR-020-gobierno-de-datos.md).
+
+### Reprocesamiento / backfill
+Procedimiento documentado y verificable en [docs/runbooks/data-engineer.md](docs/runbooks/data-engineer.md). La carga es **idempotente**: re-correr un período no duplica.
+
 ## API
 
-Autenticación: header `X-API-Key: abcdef12345`
+Autenticación: header `X-API-Key`. El valor se configura con la env var `API_KEY` (ver sección **Configuración**); **no hay default** — si no está seteada, la API responde 503.
 
 ### Endpoints
 
@@ -51,11 +96,32 @@ Response 403: API key inválida
 Response 400: date_end < date_start
 ```
 
-**GET /api/v1/wells**
+**GET /api/v1/wells** _(deprecado — usar `/api/v1/pozos`)_
 ```
 Params: date_query (YYYY-MM-DD)
-Response 200: [{ "id_well": "POZO-001" }, ...]
+Response 200: [{ "id_well": "POZO-001", ... }]   (datos MOCK de Fase 1)
 Response 403: API key inválida
+```
+
+**GET /api/v1/produccion** — producción mensual real (capa gold)
+```
+Params: idpozo (opcional), anio (opcional), limit (1-1000, def. 100), offset
+Response 200: [{ "idpozo", "anio", "mes", "fecha_mes", "empresa", "cuenca",
+                 "provincia", "area_yacimiento", "prod_pet", "prod_gas", "prod_agua" }, ...]
+Response 403: API key inválida | 503: warehouse no disponible
+```
+
+**GET /api/v1/pozos** — maestro de pozos real (capa gold)
+```
+Params: provincia (opcional), cuenca (opcional), limit (1-1000, def. 100), offset
+Response 200: [{ "idpozo", "sigla", "formacion_productiva", "area_yacimiento",
+                 "cuenca", "provincia", "tipo_reservorio", "profundidad" }, ...]
+Response 403 | 503
+```
+
+**GET /api/v1/pozos/{idpozo}** — un pozo por id
+```
+Response 200: { ...pozo... } | 404: no existe | 403 | 503
 ```
 
 **GET /health**
@@ -63,20 +129,61 @@ Response 403: API key inválida
 Response 200: { "status": "ok" }
 ```
 
+## Configuración (variables de entorno)
+
+La API se configura por variables de entorno, con defaults solo para desarrollo. **En producción se setean como secrets de GitHub** y el deploy las inyecta.
+
+| Variable | Default (dev) | Descripción |
+|----------|---------------|-------------|
+| `API_KEY` | _(sin default — requerida)_ | Clave del header `X-API-Key`. **Debe** setearse (en prod, un valor secreto); si falta, la API responde 503. |
+| `WAREHOUSE_DSN` | `postgresql://dwh:dwh@localhost:5433/oilgas` | Conexión read-only al data warehouse (capa gold). En prod apunta a la base real. |
+
+- **Local sin Docker:** seteá `API_KEY` (no tiene default); el warehouse usa el default local:
+  ```bash
+  API_KEY=clave-local poetry run uvicorn app.main:app --reload
+  ```
+- **Local con Docker:** el contenedor alcanza el warehouse del host via `host.docker.internal:5433` (ya es el default en `docker-compose.yaml`).
+- **Producción:** setear `API_KEY` y `WAREHOUSE_DSN`. El valor de `WAREHOUSE_DSN` depende de dónde se despliegue el warehouse.
+
+> **Warehouse en producción:** corre como **contenedor `postgres:16` colocado** en la misma EC2 (en el `docker-compose` que despliega el CD), con config magra + `mem_limit` y un **swapfile** por el RAM de la t2.micro. El puerto no se expone: solo lo alcanza la API por la red interna. El `gold` se carga por **dump/restore** desde el pipeline (que corre local). Topología y alternativas en [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
+
 ## CI/CD
 
-Pipeline implementado con GitHub Actions (`.github/workflows/CI.yml`):
+El pipeline está dividido en dos workflows de GitHub Actions:
+
+### CI (`CI.yml`) — se ejecuta en todo push y PR
 
 | Job | Trigger | Descripción |
 |-----|---------|-------------|
 | `test` | Todo push y PR | Análisis estático (ruff) + tests con cobertura |
 | `prometheus-rules` | Todo push y PR | Validación de reglas de alerta con promtool |
-| `build-and-push` | Push a develop/staging/main | Build y push de imagen Docker a ghcr.io |
-| `deploy-dev` | Push a develop | Deploy a EC2 dev + health check + rollback automático |
-| `deploy-staging` | Push a staging | Deploy a EC2 staging + health check + rollback automático |
-| `deploy-prod` | Push a main | Deploy a EC2 prod + health check + rollback automático |
+| `build-and-scan` | Push a develop/staging/main | Build de imagen Docker + escaneo de vulnerabilidades con Trivy + commit del reporte en `Reports/report.txt` |
+| `push` | Push a develop/staging/main (después de `build-and-scan`) | Push de la imagen a Amazon ECR tageada con el nombre de la rama |
 
-El deploy usa rolling update via `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
+### CD (`CD.yml`) — se ejecuta cuando CI finaliza con éxito
+
+| Job | Trigger | Descripción |
+|-----|---------|-------------|
+| `deploy-develop` | CI exitoso en `develop` | Deploy a EC2 `tp-development` via AWS SSM |
+| `deploy-staging` | CI exitoso en `staging` | Deploy a EC2 `tp-staging` via AWS SSM |
+| `deploy-prod` | CI exitoso en `main` | Deploy a EC2 `tp-production` via AWS SSM |
+
+El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`, `API_KEY`, `WAREHOUSE_DSN`), configura un **swapfile de 1 GB** (idempotente, por el RAM ajustado de la t2.micro — ver [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md)) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
+
+Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
+
+### Secrets de GitHub Actions
+
+El pipeline requiere estos secrets (Settings → Secrets and variables → Actions). Los dos ARN salen de la infraestructura (`infra/terraform`, ver `terraform output`).
+
+| Secret | Usado por | Para qué sirve |
+|--------|-----------|----------------|
+| `AWS_CI_ROLE_ARN` | CI (`build-and-scan`, `push`) | ARN del rol `GithubCIRole`. GitHub Actions lo asume via OIDC para autenticarse en ECR y pushear la imagen. |
+| `AWS_CD_ROLE_ARN` | CD (`deploy-*`) | ARN del rol `InstanceCDRole`. GitHub Actions lo asume via OIDC para ejecutar el deploy en las EC2 via SSM. |
+| `SLACK_WEBHOOK_URL` | CD | Incoming Webhook de Slack. Se inyecta en el `.env` de la instancia para que Alertmanager envíe las alertas al canal. |
+| `GH_TOKEN` | CD | Personal Access Token con scope `repo`. El script de deploy lo usa para clonar el repositorio (privado) dentro de la instancia. |
+| `API_KEY` | CD | Clave del header `X-API-Key`. El deploy la inyecta en el `.env` de la instancia (la API responde 503 si falta). |
+| `WAREHOUSE_DSN` | CD | DSN read-only al data warehouse (capa gold). El deploy lo inyecta en el `.env`; su valor depende de dónde corra el warehouse en prod. |
 
 ## Monitoreo
 
@@ -128,13 +235,23 @@ Cobertura actual: 100%
 ├── app/
 │   ├── main.py
 │   ├── forecast/routes.py
-│   ├── wells/routes.py
+│   ├── wells/routes.py        # deprecado (mock Fase 1)
+│   ├── pozos/routes.py        # API sobre gold
+│   ├── produccion/routes.py   # API sobre gold
+│   ├── db.py                  # acceso read-only al warehouse
 │   ├── metrics/
 │   └── limiter.py
+├── data_platform/             # plataforma de datos (Fase 2)
+│   ├── dags/                  # DAGs de Airflow (bronze_ingesta, dbt_transform)
+│   ├── dbt/oilgas/            # modelos dbt (silver/gold) + tests + dbt docs
+│   ├── metabase/              # setup del BI
+│   └── docker-compose.yaml
+├── docs/runbooks/             # runbooks por rol (data-engineer, data-analyst)
 ├── monitoring/
 │   ├── prometheus/
 │   │   ├── prometheus.yml
-│   │   └── rules/alerts.yml
+│   │   ├── rules/alerts.yml
+│   │   └── tests/alerts_test.yml
 │   ├── alertmanager/
 │   │   └── alertmanager.yml.template
 │   └── grafana/
@@ -142,19 +259,42 @@ Cobertura actual: 100%
 │       └── dashboards/
 ├── tests/
 ├── adr/
-├── .github/workflows/CI.yml
+├── Reports/
+│   └── report.txt
+├── .github/workflows/
+│   ├── CI.yml
+│   └── CD.yml
 ├── docker-compose.yaml
-└── Dockerfile
+├── Dockerfile
+├── poetry.lock
+├── pyproject.toml
+└── README.md
 ```
 
 ## ADRs
 
 Las decisiones de arquitectura están documentadas en `/adr`:
 
-- Stack de monitoreo: Prometheus + Grafana
-- Instrumentación de métricas con prometheus-client
-- Routing de alertas con Alertmanager
-- Canal de notificaciones: Slack
-- Testing de reglas de alerta con promtool
-- Decisiones de diseño del dashboard de Grafana
-- Estrategia de despliegue: Rolling Update con Docker Compose
+| # | Decisión |
+|---|----------|
+| ADR-001 | API REST mock con FastAPI y OpenAPI |
+| ADR-002 | Plataforma de cómputo: Amazon EC2 |
+| ADR-003 | Registry de imágenes Docker: Amazon ECR |
+| ADR-004 | Autenticación de GitHub Actions con AWS via OIDC |
+| ADR-005 | Deploy remoto a EC2 via AWS SSM |
+| ADR-006 | Estrategia de despliegue: reemplazo controlado con health check y rollback |
+| ADR-007 | Escaneo de vulnerabilidades en imágenes Docker (Trivy) |
+| ADR-008 | Stack de monitoreo: Prometheus + Grafana |
+| ADR-009 | Instrumentación de métricas con prometheus-client |
+| ADR-010 | Routing de alertas con Prometheus Alertmanager |
+| ADR-011 | Canal de notificaciones: Slack |
+| ADR-012 | Testing de reglas de alerta con promtool |
+| ADR-013 | Decisiones de diseño del dashboard de Grafana |
+| ADR-014 | Orquestación de datos con Airflow (DAGs como código) |
+| ADR-015 | Arquitectura medallion (bronze / silver / gold) |
+| ADR-016 | Tipo de carga (full vs incremental) |
+| ADR-017 | Modelo dimensional (esquema estrella) |
+| ADR-018 | Capa de servicio — API REST de solo lectura sobre Gold |
+| ADR-019 | Estrategia de calidad de datos (dbt tests + store_failures + gate) |
+| ADR-020 | Plataforma de gobierno y linaje (dbt docs + Airflow vs DataHub) |
+| ADR-021 | Topología del warehouse en producción (contenedor colocado en EC2) |
