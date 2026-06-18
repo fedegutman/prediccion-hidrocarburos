@@ -1,0 +1,11 @@
+# Logs de Airflow (se generan en runtime, no se versionan)
+logs/
+
+# Artefactos de dbt
+dbt/oilgas/target/
+dbt/oilgas/dbt_packages/
+dbt/oilgas/logs/
+
+# Artefactos generados en runtime (no versionar)
+config/airflow.cfg
+dbt/oilgas/.user.yml

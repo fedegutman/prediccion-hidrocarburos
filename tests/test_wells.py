@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
-HEADERS = {"X-API-Key": "abcdef12345"}
+HEADERS = {"X-API-Key": "test-api-key"}
 
 
 def test_wells_returns_200() -> None:

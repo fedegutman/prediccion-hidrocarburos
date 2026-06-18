@@ -1,0 +1,14 @@
+# Cómo dbt se conecta al warehouse. dbt corre DENTRO de los contenedores de Airflow,
+# por eso el host es `warehouse` (nombre del servicio) y el puerto interno 5432.
+oilgas:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: warehouse
+      port: 5432
+      user: dwh
+      password: dwh
+      dbname: oilgas
+      schema: gold        # schema por defecto; cada capa (silver/gold) lo sobreescribe
+      threads: 4
