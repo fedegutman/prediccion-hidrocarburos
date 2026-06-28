@@ -67,13 +67,17 @@
       </div>
     </div>
 
+    <p style="color:var(--muted);font-size:13.5px;margin:2px 0 0">
+      <strong>Nota:</strong> los enlaces marcados <span class="pub loc">stack local</span> (dbt docs :8082, Airflow, Metabase) solo funcionan con el stack levantado en tu máquina (<code>cd data_platform &amp;&amp; docker compose up -d</code>); no corren en el sitio público (decisión de costo/RAM, ADR-021). El <strong>catálogo publicado</strong> de arriba sí está siempre disponible.
+    </p>
+
     <h2>Modelo medallion</h2>
     <table>
       <thead><tr><th>Capa</th><th>Schema</th><th>Contenido</th><th>Owner / dominio</th></tr></thead>
       <tbody>
-        <tr><td><span class="badge b-bronze">BRONZE</span></td><td><code>bronze</code></td><td>Crudo de las 2 fuentes + metadata técnica de carga (ADR-023)</td><td>equipo-datos</td></tr>
-        <tr><td><span class="badge b-silver">SILVER</span></td><td><code>silver</code></td><td>Limpio, tipado, deduplicado (<code>stg_*</code>)</td><td>equipo-datos · produccion/pozos</td></tr>
-        <tr><td><span class="badge b-gold">GOLD</span></td><td><code>gold</code></td><td>Estrella <code>fct_produccion</code> + <code>dim_*</code> (ADR-017)</td><td>equipo-datos · produccion</td></tr>
+        <tr><td><span class="badge b-bronze">BRONZE</span></td><td><a href="./catalog/#!/source/source.oilgas.bronze.produccion"><code>bronze</code></a></td><td>Crudo de las 2 fuentes + metadata técnica de carga (ADR-023)</td><td>equipo-datos</td></tr>
+        <tr><td><span class="badge b-silver">SILVER</span></td><td><a href="./catalog/#!/model/model.oilgas.stg_produccion"><code>silver</code></a></td><td>Limpio, tipado, deduplicado (<code>stg_*</code>)</td><td>equipo-datos · produccion/pozos</td></tr>
+        <tr><td><span class="badge b-gold">GOLD</span></td><td><a href="./catalog/#!/model/model.oilgas.fct_produccion"><code>gold</code></a></td><td>Estrella <code>fct_produccion</code> + <code>dim_*</code> (ADR-017)</td><td>equipo-datos · produccion</td></tr>
       </tbody>
     </table>
 
@@ -92,12 +96,12 @@
       <div class="card">
         <h3>✅ Calidad de datos</h3>
         <p>Tests de dbt (validez, unicidad, integridad referencial, completitud) con bloqueo de promoción. Las filas que fallan se persisten en <code>dq_failures</code>.</p>
-        <div class="links"><a href="./catalog/">Ver tests en el catálogo</a> <a href="https://github.com/fedegutman/tp-software/blob/main/adr/ADR-019-calidad-de-datos.md">ADR-019</a></div>
+        <div class="links"><a href="./catalog/#!/model/model.oilgas.fct_produccion">Ver tests de fct_produccion</a> <a href="https://github.com/fedegutman/tp-software/blob/main/adr/ADR-019-calidad-de-datos.md">ADR-019</a></div>
       </div>
       <div class="card">
         <h3>🧬 Linaje</h3>
         <p>Grafo de dependencias tabla y columna Bronze → Silver → Gold. El <code>manifest.json</code> del catálogo es ingestable por DataHub vía recipe si se adopta a futuro (ADR-020).</p>
-        <div class="links"><a href="./catalog/">Ver linaje en el catálogo</a></div>
+        <div class="links"><a href="./catalog/#!/model/model.oilgas.fct_produccion">Abrir fct_produccion → pestaña "Lineage Graph"</a></div>
       </div>
     </div>
 
