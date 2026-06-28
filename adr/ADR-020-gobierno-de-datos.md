@@ -68,3 +68,18 @@ sin infraestructura adicional, corriendo en el mismo stack de Docker Compose exi
 **Contras:**
 - No hay una única UI centralizada de gobierno — requiere navegar entre Airflow y dbt docs
 - En producción real con múltiples equipos se migraría a DataHub o similar
+
+## Actualización (2026-06-28): catálogo navegable único
+
+La contra "no hay una única UI centralizada" se aborda **sin sumar DataHub**, con tres refinamientos:
+
+1. **Portal de gobierno único** (`docs/gobierno/index.html`): página estática que es el **punto de entrada único** y enmarca las cuatro superficies — catálogo/linaje (dbt docs), workflows + última actualización (Airflow), BI (Metabase) y salud de calidad (tests dbt + `dq_failures`) — con la tabla del medallion, owners y un glosario.
+2. **Publicación del catálogo a GitHub Pages**: un job de CI corre `dbt docs generate` (sobre el Postgres efímero + fixture) y publica el portal como home y el catálogo dbt bajo `/catalog/` en una **URL fija**, navegable sin levantar el stack. El `target/` sigue gitignoreado: se **genera en CI**, no se versiona (sin drift).
+3. **Metadata enriquecida**: se agregan `meta` (`owner`, `dominio`) y `tags` a los modelos de `silver` y `gold`, visibles en dbt docs.
+
+**Ruta de migración a DataHub** (si en el futuro hay RAM/equipo): el `manifest.json` que dbt ya genera es **ingestable por DataHub** vía una *ingestion recipe* (source `dbt`), de modo que la decisión actual **no es un callejón sin salida** — el catálogo dbt se reusa como fuente.
+
+**Alternativas de la actualización:**
+- **Portal estático + publicar dbt docs a Pages (elegida):** una sola URL de entrada, versionada y sin infra nueva.
+- **Solo dejar las 4 UIs locales (status quo):** es exactamente la contra que la cátedra observó; descartada.
+- **Adoptar DataHub ahora:** sigue descartado por RAM/costo (ver arriba); se deja documentada la ruta de migración en su lugar.

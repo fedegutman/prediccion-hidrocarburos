@@ -59,12 +59,18 @@ def bronze_ingesta():
     def load_produccion(csv_path: str, **context) -> int:
         import bronze_lib as bl
         params = context["params"]
-        return bl.load_produccion_bronze(csv_path, params.get("date_from"), params.get("date_to"))
+        return bl.load_produccion_bronze(
+            csv_path, params.get("date_from"), params.get("date_to"),
+            source_url=PRODUCCION_URL, run_id=context.get("run_id"),
+        )
 
     @task
-    def load_pozos(csv_path: str) -> int:
+    def load_pozos(csv_path: str, **context) -> int:
         import bronze_lib as bl
-        return bl.load_full_replace(csv_path, schema="bronze", table="pozos")
+        return bl.load_full_replace(
+            csv_path, schema="bronze", table="pozos",
+            source_url=POZOS_URL, run_id=context.get("run_id"),
+        )
 
     load_produccion(extract_produccion())
     load_pozos(extract_pozos())

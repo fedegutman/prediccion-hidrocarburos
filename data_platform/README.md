@@ -25,6 +25,8 @@ Las tres capas medallion (schemas del warehouse):
 | `gold` | Modelo estrella `fct_produccion` + `dim_pozo/empresa/area/tiempo` (tablas) |
 | `dq_failures` | Filas que fallan un test de calidad (persistidas, ver ADR-019) |
 
+> **Diagrama del esquema estrella (ERD):** ver [ADR-017](../adr/ADR-017-modelo-dimensional.md#diagrama-del-esquema-estrella) o el [README raíz](../README.md#modelo-estrella-gold).
+
 > ℹ️ Hay **dos Postgres**: `postgres` es la base interna de Airflow (metadatos); `warehouse` es el data
 > warehouse del proyecto. Separados a propósito.
 

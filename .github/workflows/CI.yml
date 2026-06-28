@@ -96,8 +96,139 @@ jobs:
       - name: dbt build (construye Silver/Gold + corre los tests de calidad)
         run: dbt build --project-dir data_platform/dbt/oilgas --target ci
 
+  # Gate negativo: prueba que la calidad DETECTA datos rotos (no solo que el pipeline corre).
+  # Carga el fixture ROJO y assertea que `dbt build` FALLA. Si pasara, el gate estaría roto.
+  dbt-tests-red:
+    runs-on: ubuntu-latest
+    services:
+      warehouse:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oilgas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: oilgas
+      DBT_PROFILES_DIR: ${{ github.workspace }}/ci/dbt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install "dbt-core==1.8.*" "dbt-postgres==1.8.*"
+
+      - name: Install postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Cargar fixture ROJO en Bronze
+        run: psql "postgresql://postgres:postgres@localhost:5432/oilgas" -v ON_ERROR_STOP=1 -f ci/fixtures/bronze_seed_red.sql
+
+      - name: El gate DEBE bloquear datos rotos (dbt build debe FALLAR)
+        run: |
+          if dbt build --project-dir data_platform/dbt/oilgas --target ci; then
+            echo "::error::El gate de calidad NO detectó los datos rotos del fixture rojo: dbt build pasó cuando debía fallar."
+            exit 1
+          else
+            echo "OK: dbt build falló como se esperaba sobre el fixture rojo (el gate detecta y bloquea)."
+          fi
+
+  # Publica el catálogo de gobierno (portal + dbt docs) a GitHub Pages.
+  # Requisito una sola vez: repo → Settings → Pages → Source = "GitHub Actions".
+  pages:
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Tolerante mientras Pages no esté habilitado en el repo (Settings → Pages → GitHub Actions).
+    # Si el deploy falla por eso, NO tumba el workflow. Quitar una vez habilitado para que
+    # un fallo real de publicación vuelva a ser visible.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    services:
+      warehouse:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oilgas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: oilgas
+      DBT_PROFILES_DIR: ${{ github.workspace }}/ci/dbt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install "dbt-core==1.8.*" "dbt-postgres==1.8.*"
+
+      - name: Install postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Cargar fixtures en Bronze
+        run: psql "postgresql://postgres:postgres@localhost:5432/oilgas" -v ON_ERROR_STOP=1 -f ci/fixtures/bronze_seed.sql
+
+      - name: dbt build (puebla el warehouse para que el catálogo tenga datos)
+        run: dbt build --project-dir data_platform/dbt/oilgas --target ci
+
+      - name: dbt docs generate (catálogo + lineage)
+        run: dbt docs generate --project-dir data_platform/dbt/oilgas --target ci
+
+      - name: Armar el sitio (portal de gobierno + catálogo dbt en /catalog)
+        run: |
+          mkdir -p site/catalog
+          cp docs/gobierno/index.html site/index.html
+          cp data_platform/dbt/oilgas/target/index.html    site/catalog/index.html
+          cp data_platform/dbt/oilgas/target/manifest.json site/catalog/manifest.json
+          cp data_platform/dbt/oilgas/target/catalog.json  site/catalog/catalog.json
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir artefacto de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Desplegar a GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
   build-and-scan:
-    needs: [test, prometheus-rules, dbt-tests]
+    needs: [test, prometheus-rules, dbt-tests, dbt-tests-red]
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

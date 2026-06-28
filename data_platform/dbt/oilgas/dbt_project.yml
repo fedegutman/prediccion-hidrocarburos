@@ -27,7 +27,11 @@ models:
       +schema: silver
       +materialized: view
     gold:
-      +schema: gold
+      # +schema parametrizable por var para habilitar la promoción Write-Audit-Publish:
+      # el DAG dbt_transform construye y testea gold en un schema staging (gold_staging) y
+      # recién hace swap a `gold` si pasan los tests. Default 'gold' => `dbt build` local y el
+      # CI se comportan igual que antes (no se pasa la var). Ver ADR-032.
+      +schema: "{{ var('gold_schema', 'gold') }}"
       +materialized: table
 
 # store_failures: las filas que fallan un test (incluidos los warn) se PERSISTEN en tablas

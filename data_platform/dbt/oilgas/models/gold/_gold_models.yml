@@ -3,6 +3,11 @@ version: 2
 models:
   - name: dim_pozo
     description: "Dimensión pozo (SCD Type 1). Grano: idpozo."
+    config:
+      meta:
+        owner: equipo-datos
+        dominio: pozos
+      tags: ["gold", "dimension"]
     columns:
       - name: pozo_sk
         description: "Surrogate key (md5 de idpozo)."
@@ -13,6 +18,11 @@ models:
 
   - name: dim_empresa
     description: "Dimensión empresa operadora. Grano: id_empresa."
+    config:
+      meta:
+        owner: equipo-datos
+        dominio: empresa
+      tags: ["gold", "dimension"]
     columns:
       - name: empresa_sk
         description: "Surrogate key (md5 de id_empresa)."
@@ -24,6 +34,11 @@ models:
 
   - name: dim_area
     description: "Dimensión geográfica (área/yacimiento, cuenca, provincia)."
+    config:
+      meta:
+        owner: equipo-datos
+        dominio: geografia
+      tags: ["gold", "dimension"]
     columns:
       - name: area_sk
         description: "Surrogate key (md5 de la combinación geográfica normalizada)."
@@ -31,6 +46,11 @@ models:
 
   - name: dim_tiempo
     description: "Dimensión tiempo mensual (calendario denso entre el primer y el último mes con datos)."
+    config:
+      meta:
+        owner: equipo-datos
+        dominio: tiempo
+      tags: ["gold", "dimension"]
     columns:
       - name: tiempo_sk
         description: "Surrogate key AAAAMM (entero)."
@@ -53,6 +73,10 @@ models:
     config:
       contract:
         enforced: true
+      meta:
+        owner: equipo-datos
+        dominio: produccion
+      tags: ["gold", "fact"]
     columns:
       - name: pozo_sk
         data_type: text

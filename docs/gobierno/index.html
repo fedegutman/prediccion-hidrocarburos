@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catálogo de Datos — OilGas · Portal de Gobierno</title>
+  <style>
+    :root{
+      --paper:#f3f4f2; --surface:#fff; --ink:#15211f; --muted:#566460; --line:#e2e4df;
+      --petrol:#0c5e57; --petrol-deep:#0a2c29; --brass:#9c7522;
+      --bronze:#a9743b; --silver:#8c969c; --gold:#b0852e;
+      --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px}
+    .wrap{max-width:980px;margin:0 auto;padding:0 22px}
+    header{background:var(--petrol-deep);color:#eaf1ef;padding:42px 0 34px;border-bottom:3px solid var(--gold)}
+    header .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#7fb8b0;margin:0 0 12px}
+    header h1{margin:0 0 10px;font-size:30px;letter-spacing:-.02em}
+    header p{margin:0;color:#c2d4d0;max-width:60ch}
+    main{padding:36px 0 70px}
+    h2{font-size:20px;letter-spacing:-.01em;margin:34px 0 14px}
+    a{color:var(--petrol);text-decoration:none}
+    a:hover{text-decoration:underline}
+    code{font-family:var(--mono);font-size:.85em;background:#e4eeec;color:#0a4a45;padding:1px 5px;border-radius:4px}
+    .grid{display:grid;gap:14px}
+    @media(min-width:680px){.grid.two{grid-template-columns:1fr 1fr}}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+    .card h3{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px}
+    .card p{margin:0 0 10px;color:var(--muted);font-size:14.5px}
+    .card .links a{display:inline-block;font-family:var(--mono);font-size:13px;margin-right:14px}
+    .pub{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#e2efeb;color:#2f7a6e;text-transform:uppercase;letter-spacing:.04em}
+    .loc{background:#f5ecda;color:#9a6a12}
+    table{border-collapse:collapse;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14.5px}
+    th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line)}
+    th{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#fafaf8}
+    tr:last-child td{border-bottom:0}
+    .badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;color:#fff}
+    .b-bronze{background:var(--bronze)}.b-silver{background:var(--silver)}.b-gold{background:var(--gold)}
+    dl.gloss{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 20px}
+    dl.gloss div{padding:10px 0;border-bottom:1px solid var(--line)}
+    dl.gloss div:last-child{border-bottom:0}
+    dl.gloss dt{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--petrol)}
+    dl.gloss dd{margin:2px 0 0;color:var(--muted);font-size:14px}
+    footer{border-top:1px solid var(--line);padding:22px 0;color:#8a938f;font-family:var(--mono);font-size:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <p class="eyebrow">Plataforma de Datos OilGas · Gobierno</p>
+      <h1>Catálogo de Datos — Portal de Gobierno</h1>
+      <p>Punto de entrada único al gobierno de la plataforma: catálogo y linaje de datos, workflows de ingesta, BI y salud de calidad. Decisión de herramienta en <a href="https://github.com/fedegutman/tp-software/blob/main/adr/ADR-020-gobierno-de-datos.md" style="color:#7fb8b0">ADR-020</a>.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <h2>Catálogo de datos (dbt docs)</h2>
+    <div class="card">
+      <h3>📚 Catálogo &amp; linaje <span class="pub">publicado</span></h3>
+      <p>Modelos, columnas, descripciones, owners/dominio, tests de calidad y el grafo de linaje Bronze → Silver → Gold. Generado por dbt y publicado en este sitio.</p>
+      <div class="links">
+        <a href="./catalog/">→ Abrir el catálogo</a>
+        <a href="http://localhost:8082" class="loc-link">localhost:8082 <span class="pub loc">stack local</span></a>
+      </div>
+    </div>
+
+    <h2>Modelo medallion</h2>
+    <table>
+      <thead><tr><th>Capa</th><th>Schema</th><th>Contenido</th><th>Owner / dominio</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge b-bronze">BRONZE</span></td><td><code>bronze</code></td><td>Crudo de las 2 fuentes + metadata técnica de carga (ADR-023)</td><td>equipo-datos</td></tr>
+        <tr><td><span class="badge b-silver">SILVER</span></td><td><code>silver</code></td><td>Limpio, tipado, deduplicado (<code>stg_*</code>)</td><td>equipo-datos · produccion/pozos</td></tr>
+        <tr><td><span class="badge b-gold">GOLD</span></td><td><code>gold</code></td><td>Estrella <code>fct_produccion</code> + <code>dim_*</code> (ADR-017)</td><td>equipo-datos · produccion</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Superficies de gobierno</h2>
+    <div class="grid two">
+      <div class="card">
+        <h3>🔀 Workflows &amp; última actualización</h3>
+        <p>DAGs de ingesta/transformación, historial de runs y cuándo se actualizó cada capa por última vez.</p>
+        <div class="links"><a href="http://localhost:8080">Airflow <span class="pub loc">stack local</span></a></div>
+      </div>
+      <div class="card">
+        <h3>📊 BI / Dashboards</h3>
+        <p>Dashboard "Producción de Hidrocarburos" (por mes, empresa, cuenca) sobre la capa <code>gold</code>.</p>
+        <div class="links"><a href="http://localhost:3001">Metabase <span class="pub loc">stack local</span></a></div>
+      </div>
+      <div class="card">
+        <h3>✅ Calidad de datos</h3>
+        <p>Tests de dbt (validez, unicidad, integridad referencial, completitud) con bloqueo de promoción. Las filas que fallan se persisten en <code>dq_failures</code>.</p>
+        <div class="links"><a href="./catalog/">Ver tests en el catálogo</a> <a href="https://github.com/fedegutman/tp-software/blob/main/adr/ADR-019-calidad-de-datos.md">ADR-019</a></div>
+      </div>
+      <div class="card">
+        <h3>🧬 Linaje</h3>
+        <p>Grafo de dependencias tabla y columna Bronze → Silver → Gold. El <code>manifest.json</code> del catálogo es ingestable por DataHub vía recipe si se adopta a futuro (ADR-020).</p>
+        <div class="links"><a href="./catalog/">Ver linaje en el catálogo</a></div>
+      </div>
+    </div>
+
+    <h2>Glosario</h2>
+    <dl class="gloss">
+      <div><dt>fct_produccion</dt><dd>Hechos de producción mensual por pozo. Grano: idpozo × año × mes. Medidas: prod_pet/gas/agua, inyecciones, tef.</dd></div>
+      <div><dt>surrogate key (sk)</dt><dd>Clave sustituta determinística (<code>md5</code> de la clave natural, o <code>AAAAMM</code> en tiempo) que enlaza la fact con las dimensiones.</dd></div>
+      <div><dt>dq_failures</dt><dd>Schema donde se persisten las filas que fallan un test de calidad (auditable, ver ADR-019).</dd></div>
+      <div><dt>tef</dt><dd>Tiempo efectivo de producción del período.</dd></div>
+    </dl>
+
+  </main>
+
+  <footer class="wrap">
+    Catálogo generado por dbt y publicado vía GitHub Actions · Plataforma de Datos OilGas · Gobierno = dbt docs + Airflow (ADR-020)
+  </footer>
+</body>
+</html>
