@@ -4,7 +4,9 @@
 - Listado de pozos (dim maestro): carga full (reemplazo del snapshot).
 
 Parametrizado por rango de fechas para permitir backfill / reproceso de un período.
-Por defecto carga una ventana acotada (2023–2024) para que la demo sea rápida.
+Por defecto carga una ventana acotada (2023–2024) para que la demo sea rápida. Si
+`date_from`/`date_to` se pasan en null, usa la ventana programada del DAG
+(`data_interval`) y AVANZA mes a mes en operación recurrente (ver runbook data-engineer).
 """
 
 from datetime import datetime, timedelta
@@ -37,9 +39,9 @@ POZOS_URL = (
     },
     params={
         "date_from": Param("2023-01-01", type=["null", "string"],
-                           description="Fecha inicio del período a cargar (YYYY-MM-DD)"),
+                           description="Inicio del período a cargar (YYYY-MM-DD). null = usar el data_interval del DAG (avanza mes a mes en operación programada)."),
         "date_to": Param("2024-12-31", type=["null", "string"],
-                         description="Fecha fin del período a cargar (YYYY-MM-DD). null = sin tope"),
+                         description="Fin del período a cargar (YYYY-MM-DD). null = usar el data_interval del DAG."),
     },
     tags=["fase2", "bronze"],
 )
@@ -59,8 +61,17 @@ def bronze_ingesta():
     def load_produccion(csv_path: str, **context) -> int:
         import bronze_lib as bl
         params = context["params"]
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
+        # Ventana de carga: si los params vienen en null, se usa la ventana programada
+        # del DAG (data_interval) para que en operación recurrente AVANCE mes a mes.
+        # Con los defaults (2023-01-01..2024-12-31) carga esa ventana fija para la demo.
+        if date_from is None:
+            date_from = context["data_interval_start"].strftime("%Y-%m-%d")
+        if date_to is None:
+            date_to = context["data_interval_end"].strftime("%Y-%m-%d")
         return bl.load_produccion_bronze(
-            csv_path, params.get("date_from"), params.get("date_to"),
+            csv_path, date_from, date_to,
             source_url=PRODUCCION_URL, run_id=context.get("run_id"),
         )
 

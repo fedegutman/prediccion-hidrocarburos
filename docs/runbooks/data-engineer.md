@@ -20,6 +20,7 @@ y `gold`, o aviso de rectificación en la fuente. No es programado: se corre **a
 ## Pasos
 1. **Identificar el período** (ej. `2024-03`) y confirmar con la fuente que el dato corregido ya está publicado.
 2. **Re-ingestar Bronze** del período: disparar el DAG `bronze_ingesta` con los parámetros de fecha (`date_from`/`date_to`). La carga es **idempotente** (ver Decisión funcional): producción se carga con TRUNCATE+append del rango y el maestro de pozos con full TRUNCATE+append → correrlo N veces deja el mismo resultado, sin duplicados.
+   - **Ventana de carga:** por defecto los params son `2023-01-01`/`2024-12-31` (ventana fija para la demo). Para un **backfill puntual**, pasar el rango deseado. Si se dejan en `null`, el DAG usa su **`data_interval`** (la ventana programada), de modo que en **operación recurrente avance mes a mes** en vez de recargar siempre la ventana fija.
 3. **Reconstruir Silver/Gold:** `dbt build` (o `dbt build --select silver+ gold+`) → reconstruye los modelos y **corre los tests de calidad**.
 4. **Revisar la consecuencia de calidad:** si algún test falla, la promoción queda frenada (ver [ADR-019](../../adr/ADR-019-calidad-de-datos.md)). Inspeccionar las filas persistidas en el schema `dq_failures`.
 
