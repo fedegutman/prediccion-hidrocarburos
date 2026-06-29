@@ -15,6 +15,7 @@ con **arquitectura medallion** (Bronze → Silver → Gold) y consumo por **API 
 | Transformación | dbt 1.8 (adapter postgres) | Construye Silver/Gold y corre los tests de calidad |
 | BI | Metabase | Dashboards para usuarios no técnicos (sobre `gold`) |
 | Gobierno / linaje | dbt docs + Airflow UI | Catálogo, linaje a nivel tabla, workflows y última actualización |
+| Experiment tracking + model registry | MLflow | Tracking de runs de entrenamiento (RF-2/RF-3) y registro de modelos versionados (Fase 3, ver ADR-024) |
 
 Las tres capas medallion (schemas del warehouse):
 
@@ -33,14 +34,14 @@ Las tres capas medallion (schemas del warehouse):
 ## Requisitos
 
 - Docker y Docker Compose
-- ~6 GB de RAM libres para Docker (Airflow + warehouse + Metabase + dbt docs)
+- ~6-7 GB de RAM libres para Docker (Airflow + warehouse + Metabase + dbt docs + MLflow)
 
 ## Levantar el stack
 
 ```bash
 cd data_platform
-docker compose up airflow-init     # setup inicial (una sola vez)
-docker compose up -d               # Airflow + warehouse + Metabase + dbt docs
+docker compose up airflow-init        # setup inicial (una sola vez)
+docker compose up -d --build          # Airflow + warehouse + Metabase + dbt docs + MLflow (--build construye la imagen de MLflow)
 docker compose ps                  # esperar a que estén "healthy"
 docker compose down                # apagar (mantiene los datos); -v para borrarlos
 ```
@@ -55,6 +56,7 @@ La primera vez tarda varios minutos: descarga imágenes e instala dbt dentro de 
 | Airflow (orquestación + workflows) | http://localhost:8080 | `airflow` / `airflow` |
 | Metabase (BI) | http://localhost:3001 | `admin@oilgas.com` / `Admin1234!` |
 | dbt docs (catálogo + linaje) | http://localhost:8082 | — |
+| MLflow (tracking + model registry) | http://localhost:5500 | — |
 | Warehouse (Postgres) | `localhost:5433`, db `oilgas` | `dwh` / `dwh` |
 
 ## Correr el pipeline
