@@ -361,3 +361,6 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-019 | Estrategia de calidad de datos (dbt tests + store_failures + gate) |
 | ADR-020 | Plataforma de gobierno y linaje (dbt docs + Airflow vs DataHub) |
 | ADR-021 | Topología del warehouse en producción (contenedor colocado en EC2) |
+| ADR-022 | Gate de calidad en la promoción a Gold (Write-Audit-Publish) |
+| ADR-023 | Metadata técnica de carga por registro en Bronze |
+| ADR-024 | Experiment tracking y model registry (MLflow) |

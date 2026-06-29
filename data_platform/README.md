@@ -140,5 +140,6 @@ no se despliegan a la nube por el límite de RAM de las instancias t2.micro.
 ## Decisiones (ADRs)
 
 `014` orquestación · `015` medallion · `016` tipo de carga · `017` modelo dimensional ·
-`018` API sobre Gold · `019` calidad · `020` gobierno · `021` topología del warehouse en prod.
+`018` API sobre Gold · `019` calidad · `020` gobierno · `021` topología del warehouse en prod ·
+`022` gate de calidad (WAP) · `023` metadata de carga en Bronze · `024` MLflow (tracking + registry).
 Todos en [`../adr/`](../adr/), con comparación de alternativas.
