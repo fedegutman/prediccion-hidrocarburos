@@ -95,6 +95,16 @@ estructural roto **bloquea el deploy** vía el job `dbt-tests` del CI.
 - **BI** → **Metabase** (`http://localhost:3001`): dashboard "Producción de Hidrocarburos" (por mes, por empresa,
   por cuenca), autoconfigurado por el servicio `metabase-init` contra el schema `gold`.
 
+## ML (Fase 3): tracking y tracer bullet
+
+- **MLflow** (experiment tracking + model registry) corre como servicio del stack → `http://localhost:5500` (ver ADR-024).
+- **Tracer bullet** (`data_platform/ml/`): valida el circuito ML de punta a punta con un modelo trivial — entrena desde el feature store, registra el modelo en MLflow y escribe predicciones en `gold.fct_forecast`. Se corre a demanda:
+  ```bash
+  docker compose --profile ml run --rm ml-tracer                      # target petróleo (default)
+  docker compose --profile ml run --rm -e TARGET=prod_gas ml-tracer   # target gas
+  ```
+  Deja una corrida en MLflow (con MAE / skill score), un modelo en `Production` y la tabla `gold.fct_forecast`. El modelo real, la validación walk-forward y la orquestación son WS5/WS6.
+
 ## Actualizar los workflows (DAGs)
 
 Los DAGs son archivos Python en `dags/`. Al guardarlos, el `dag-processor` de Airflow los detecta

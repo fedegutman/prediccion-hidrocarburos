@@ -379,6 +379,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # --- AGREGADO (Fase 3): tracer bullet ML (circuito e2e con modelo trivial). ---
+  # No arranca con `up -d` (profile "ml"); se corre a demanda:
+  #   docker compose --profile ml run --rm ml-tracer
+  # Lee el feature store, entrena, registra en MLflow y escribe gold.fct_forecast. Ver WS4.
+  ml-tracer:
+    build: ./ml
+    profiles: ["ml"]
+    environment:
+      WAREHOUSE_DSN: postgresql://dwh:dwh@warehouse:5432/oilgas
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      TARGET: prod_pet        # 'prod_pet' o 'prod_gas' (multi-target)
+    depends_on:
+      - warehouse
+      - mlflow
+    restart: "no"
+
 volumes:
   postgres-db-volume:
   warehouse-db-volume:       # --- agregado: datos del warehouse ---
