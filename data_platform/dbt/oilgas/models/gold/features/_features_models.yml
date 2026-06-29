@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: feat_produccion_base
+    description: >
+      Feature store — lógica única de features (single source of truth) sobre el panel denso
+      idpozo × dim_tiempo. Modelo intermedio (ephemeral): no se materializa; lo consumen el offline
+      y el online. Toda feature es point-in-time (solo hasta el mes M); el label mira a M+1.
+
+  - name: feat_produccion_offline
+    description: >
+      Feature store OFFLINE (OBT, grano idpozo × fecha_mes) con todas las features + el label
+      target_prod_pet_m1 (prod_pet de M+1). Fuente del training (filtrar target IS NOT NULL +
+      split temporal). Persistida (RNF-1), reproducible por fecha con var fecha_corte (RNF-3).
+    config:
+      meta:
+        owner: equipo-ml
+        dominio: features_produccion
+      tags: ["gold", "feature_store", "offline"]
+    columns:
+      - name: idpozo
+        description: "Identificador del pozo (entity_id)."
+        data_tests:
+          - not_null
+      - name: fecha_mes
+        description: "Mes M de la fila-feature (event_time)."
+        data_tests:
+          - not_null
+      - name: pozo_sk
+        description: "FK a dim_pozo."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_pozo')
+              field: pozo_sk
+      - name: tiempo_sk
+        description: "FK a dim_tiempo (verifica que el mes exista en el calendario denso)."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_tiempo')
+              field: tiempo_sk
+      - name: mes
+        description: "Mes del año (1-12), feature de estacionalidad."
+        data_tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+              quote: false
+      - name: trimestre
+        description: "Trimestre (1-4), feature de estacionalidad."
+        data_tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              quote: false
+      - name: target_prod_pet_m1
+        description: "LABEL: prod_pet del mes M+1 (NULL en el último mes de cada pozo = filas de inferencia)."
+
+  - name: feat_produccion_online
+    description: >
+      Feature store ONLINE: snapshot del último mes por pozo (una fila por pozo), SIN label, para
+      lookup por idpozo en inferencia. Derivado del offline → consistencia train/serve estructural.
+    config:
+      meta:
+        owner: equipo-ml
+        dominio: features_produccion
+      tags: ["gold", "feature_store", "online"]
+    columns:
+      - name: idpozo
+        description: "Identificador del pozo. Clave de lookup: EXACTAMENTE una fila por pozo."
+        data_tests:
+          - not_null
+          - unique
+      - name: fecha_mes
+        description: "Último mes con dato del pozo (event_time para freshness/TTL)."
+        data_tests:
+          - not_null
