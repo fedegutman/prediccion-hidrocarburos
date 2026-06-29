@@ -9,9 +9,10 @@ models:
 
   - name: feat_produccion_offline
     description: >
-      Feature store OFFLINE (OBT, grano idpozo × fecha_mes) con todas las features + el label
-      target_prod_pet_m1 (prod_pet de M+1). Fuente del training (filtrar target IS NOT NULL +
-      split temporal). Persistida (RNF-1), reproducible por fecha con var fecha_corte (RNF-3).
+      Feature store OFFLINE (OBT, grano idpozo × fecha_mes) con todas las features + los labels
+      target_prod_pet_m1 y target_prod_gas_m1 (prod de M+1) — MULTI-TARGET: el mismo store sirve para
+      entrenar un modelo de petróleo y/o de gas. Fuente del training (filtrar el target elegido IS NOT
+      NULL + split temporal). Persistida (RNF-1), reproducible por fecha con var fecha_corte (RNF-3).
     config:
       meta:
         owner: equipo-ml
@@ -53,7 +54,9 @@ models:
               values: [1, 2, 3, 4]
               quote: false
       - name: target_prod_pet_m1
-        description: "LABEL: prod_pet del mes M+1 (NULL en el último mes de cada pozo = filas de inferencia)."
+        description: "LABEL (petróleo): prod_pet del mes M+1 (NULL en el último mes de cada pozo = filas de inferencia)."
+      - name: target_prod_gas_m1
+        description: "LABEL (gas): prod_gas del mes M+1 (multi-target; NULL en el último mes de cada pozo)."
 
   - name: feat_produccion_online
     description: >

@@ -28,8 +28,12 @@ select
     (fe.prod_pet_lag0 - fe.prod_pet_lag1)                                as prod_pet_delta1,
     (fe.prod_pet_lag0 - fe.prod_pet_lag1) / nullif(fe.prod_pet_lag1, 0)  as prod_pet_pct1,
 
-    -- covariables del mes M
+    -- covariables del mes M + gas autorregresivo (multi-target)
     fe.prod_gas_m,
+    fe.prod_gas_lag1,
+    fe.prod_gas_lag2,
+    fe.prod_gas_lag3,
+    fe.prod_gas_ma3,
     fe.prod_agua_m,
     fe.prod_gas_m / nullif(fe.prod_pet_lag0, 0)                          as ratio_gas_pet,   -- GOR proxy
     fe.iny_agua_m,
@@ -53,8 +57,9 @@ select
     -- versión del esquema de features que espera el modelo (feature view versioning)
     'v1'::text                                                           as feature_set_version,
 
-    -- LABEL (mes M+1)
-    fe.target_prod_pet_m1
+    -- LABELS (mes M+1) — multi-target: petróleo y gas
+    fe.target_prod_pet_m1,
+    fe.target_prod_gas_m1
 
 from {{ ref('feat_produccion_base') }} fe
 join {{ ref('dim_tiempo') }} dt on dt.tiempo_sk = fe.tiempo_sk

@@ -74,6 +74,11 @@ select
 
     -- covariables del propio mes M (reportadas junto con la producción de M, conocidas al predecir M+1)
     prod_gas                                                                                             as prod_gas_m,
+    -- gas autorregresivo (para el modelo de gas; multi-target). Mismo criterio point-in-time que prod_pet.
+    lag(prod_gas, 1)  over w                                                                             as prod_gas_lag1,
+    lag(prod_gas, 2)  over w                                                                             as prod_gas_lag2,
+    lag(prod_gas, 3)  over w                                                                             as prod_gas_lag3,
+    avg(prod_gas)        over (partition by idpozo order by fecha_mes rows between 3 preceding and 1 preceding) as prod_gas_ma3,
     prod_agua                                                                                            as prod_agua_m,
     iny_agua                                                                                             as iny_agua_m,   -- ver ADR: supuesto de disponibilidad al cierre de M
     iny_gas                                                                                              as iny_gas_m,
@@ -83,8 +88,9 @@ select
     -- antigüedad: posición del mes en el panel denso del pozo (meses desde el primer dato, incluye huecos)
     row_number()         over w                                                                          as meses_en_produccion,
 
-    -- LABEL: ÚNICA columna forward (mes M+1). Solo se usa en el offline; el online no lo lleva.
-    lead(prod_pet, 1)    over w                                                                          as target_prod_pet_m1
+    -- LABELS: columnas forward (mes M+1). Solo en el offline; el online NO las lleva. Multi-target: petróleo y gas.
+    lead(prod_pet, 1)    over w                                                                          as target_prod_pet_m1,
+    lead(prod_gas, 1)    over w                                                                          as target_prod_gas_m1
 
 from base
 window w as (partition by idpozo order by fecha_mes)
