@@ -2,71 +2,152 @@
 
 import hmac
 import os
-from datetime import date, timedelta
-from typing import List
+from datetime import date
+from typing import List, Literal
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 from starlette.requests import Request
 
 from app.limiter import limiter
-from app.mock_data import MOCK_WELLS, MOCK_BASE_PRODUCTION, DAILY_DECLINE
 from app.metrics.business import FORECAST_REQUESTS_BY_WELL, FORECAST_DATE_RANGE_DAYS
-
+from app import db
 
 router = APIRouter()
 
 
 class ForecastPoint(BaseModel):
-    """Punto de producción estimada para un día específico."""
-
+    """Punto de producción estimada para un mes específico."""
     date: str
     prod: float
 
 
 class ForecastResponse(BaseModel):
     """Pronóstico completo de producción para un pozo en un rango de fechas."""
-
     id_well: str
+    target: str
     data: List[ForecastPoint]
 
 
 def _validate_api_key(x_api_key: str) -> None:
-    """Valida la API key contra la configurada en la variable de entorno API_KEY.
-
-    No hay default hardcodeado: si el servidor no tiene API_KEY configurada,
-    falla cerrado (rechaza la request). La comparación es de tiempo constante
-    para no filtrar información por timing.
-
-    :param x_api_key: API key recibida en el header.
-    :raises HTTPException: 503 si el servidor no tiene API_KEY configurada;
-        403 si la API key es inválida o está ausente.
-    """
     expected = os.getenv("API_KEY")
     if not expected:
-        raise HTTPException(status_code=503, detail="Servicio mal configurado: falta la variable de entorno API_KEY.")
+        raise HTTPException(status_code=503, detail="Servicio mal configurado: falta API_KEY.")
     if not hmac.compare_digest(x_api_key, expected):
-        raise HTTPException(status_code=403, detail="Acceso denegado. API Key inválida o faltante en el header.")
+        raise HTTPException(status_code=403, detail="Acceso denegado. API Key inválida.")
 
 
-def _generate_forecast(id_well: str, date_start: date, date_end: date) -> List[ForecastPoint]:
-    """Genera una lista de puntos de pronostico con tendencia lineal decreciente.
-
-    :param id_well: Identificador del pozo.
-    :param date_start: Fecha de inicio del pronostico.
-    :param date_end: Fecha de fin del pronostico.
-    :return: Lista de puntos de pronostico diario.
+def _get_forecast_from_warehouse(
+    id_well: str,
+    date_start: date,
+    date_end: date,
+    target: str,
+) -> List[ForecastPoint]:
+    """Lee las predicciones de gold.fct_forecast para el pozo y target dados."""
+    query = """
+        SELECT fecha_mes_pred, prediccion
+        FROM gold.fct_forecast
+        WHERE idpozo = %(idpozo)s
+          AND target_kind = %(target)s
+          AND fecha_mes_pred BETWEEN %(date_start)s AND %(date_end)s
+        ORDER BY fecha_mes_pred
     """
-    base = MOCK_BASE_PRODUCTION.get(id_well, 100.0)
-    points = []
-    current = date_start
-    day = 0
-    while current <= date_end:
-        prod = max(0.0, base - DAILY_DECLINE * day)
-        points.append(ForecastPoint(date=current.isoformat(), prod=round(prod, 2)))
-        current += timedelta(days=1)
-        day += 1
-    return points
+    try:
+        rows = db.run_query(query, {
+            "idpozo": id_well,
+            "target": target,
+            "date_start": date_start,
+            "date_end": date_end,
+        })
+    except Exception:
+        raise HTTPException(status_code=503, detail="Warehouse no disponible.")
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No hay predicciones para el pozo {id_well} con target {target} "
+                   "en el rango dado. Verificá que el pipeline de entrenamiento haya corrido."
+        )
+
+    return [ForecastPoint(date=str(row["fecha_mes_pred"]), prod=round(float(row["prediccion"]), 2)) for row in rows]
+
+@router.get(
+    "/forecast",
+    response_model=ForecastResponse,
+    summary="Obtener pronóstico de producción",
+    description="""
+Retorna el pronóstico mensual de producción para un pozo dado en un rango de fechas.
+Las predicciones son generadas por el modelo ML registrado en MLflow.
+
+**Parámetros:**
+- `id_well`: Identificador del pozo (idpozo en el warehouse)
+- `date_start`: Fecha de inicio en formato `YYYY-MM-DD`
+- `date_end`: Fecha de fin en formato `YYYY-MM-DD`
+- `target`: Target a predecir — `prod_pet` (petróleo, default) o `prod_gas` (gas)
+
+**Errores posibles:**
+- `403` si la API key es inválida
+- `400` si `date_end` es anterior a `date_start`
+- `404` si no hay predicciones para el pozo en el rango dado
+- `429` si se supera el límite de 60 requests por minuto
+""",
+)
+@limiter.limit("60/minute")
+def get_forecast(
+    request: Request,
+    id_well: str,
+    date_start: date,
+    date_end: date,
+    target: Literal["prod_pet", "prod_gas"] = "prod_pet",
+    x_api_key: str = Header(default=""),
+) -> ForecastResponse:
+    _validate_api_key(x_api_key)
+
+    if date_end < date_start:
+        raise HTTPException(status_code=400, detail="date_end no puede ser anterior a date_start.")
+
+    FORECAST_REQUESTS_BY_WELL.labels(id_well=id_well).inc()
+    FORECAST_DATE_RANGE_DAYS.observe((date_end - date_start).days)
+
+    data = _get_forecast_from_warehouse(id_well, date_start, date_end, target)
+    return ForecastResponse(id_well=id_well, target=target, data=data)
+
+
+def _validate_api_key(x_api_key: str) -> None:
+    expected = os.getenv("API_KEY")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Servicio mal configurado: falta API_KEY.")
+    if not hmac.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=403, detail="Acceso denegado. API Key inválida.")
+
+
+def _get_forecast_from_warehouse(id_well: str, date_start: date, date_end: date) -> List[ForecastPoint]:
+    """Lee las predicciones del feature store (gold.fct_forecast) para el pozo dado."""
+    query = """
+        SELECT fecha_mes_pred, prediccion
+        FROM gold.fct_forecast
+        WHERE idpozo = %(idpozo)s
+          AND target_kind = 'prod_pet'
+          AND fecha_mes_pred BETWEEN %(date_start)s AND %(date_end)s
+        ORDER BY fecha_mes_pred
+    """
+    with db.get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, {
+                "idpozo": id_well,
+                "date_start": date_start,
+                "date_end": date_end,
+            })
+            rows = cur.fetchall()
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No hay predicciones para el pozo {id_well} en el rango dado. "
+                   "Verificá que el pipeline de entrenamiento haya corrido."
+        )
+
+    return [ForecastPoint(date=str(row[0]), prod=round(float(row[1]), 2)) for row in rows]
 
 
 @router.get(
@@ -74,19 +155,19 @@ def _generate_forecast(id_well: str, date_start: date, date_end: date) -> List[F
     response_model=ForecastResponse,
     summary="Obtener pronóstico de producción",
     description="""
-Retorna el pronóstico diario de producción para un pozo dado en un rango de fechas.
+Retorna el pronóstico mensual de producción para un pozo dado en un rango de fechas.
+Las predicciones son generadas por el modelo ML registrado en MLflow.
 
 **Parámetros:**
-- `id_well`: Identificador del pozo (ej: `POZO-001`)
+- `id_well`: Identificador del pozo (idpozo en el warehouse)
 - `date_start`: Fecha de inicio en formato `YYYY-MM-DD`
 - `date_end`: Fecha de fin en formato `YYYY-MM-DD`
 
 **Errores posibles:**
 - `403` si la API key es inválida
 - `400` si `date_end` es anterior a `date_start`
-- `404` si el pozo no existe
+- `404` si no hay predicciones para el pozo en el rango dado
 - `429` si se supera el límite de 60 requests por minuto
-
 """,
 )
 @limiter.limit("60/minute")
@@ -99,14 +180,11 @@ def get_forecast(
 ) -> ForecastResponse:
     _validate_api_key(x_api_key)
 
-    if id_well not in [w["id_well"] for w in MOCK_WELLS]:
-        raise HTTPException(status_code=404, detail=f"El pozo {id_well} no existe.")
-
     if date_end < date_start:
         raise HTTPException(status_code=400, detail="date_end no puede ser anterior a date_start.")
 
     FORECAST_REQUESTS_BY_WELL.labels(id_well=id_well).inc()
     FORECAST_DATE_RANGE_DAYS.observe((date_end - date_start).days)
 
-    data = _generate_forecast(id_well, date_start, date_end)
+    data = _get_forecast_from_warehouse(id_well, date_start, date_end)
     return ForecastResponse(id_well=id_well, data=data)
