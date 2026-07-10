@@ -6,7 +6,7 @@ o manualmente desde la UI de Airflow para un período dado.
 Flujo:
   1. wait_for_gold    -> espera que dbt_transform haya promovido Gold exitosamente.
   2. train_pet        -> entrena modelo de prod_pet y registra en MLflow.
-  3. train_gas        -> entrena modelo de prod_gas y registra en MLflow (en paralelo).
+  3. train_gas        -> entrena modelo de prod_gas y registra en MLflow (en serie tras train_pet).
 
 Al terminar, gold.fct_forecast tiene las predicciones del próximo mes para cada pozo.
 """
@@ -82,8 +82,10 @@ def training_pipeline():
         """Entrena el modelo de producción de gas y lo registra en MLflow."""
         return _run_tracer("prod_gas")
 
-    # train_pet y train_gas corren en paralelo después de que Gold está listo
-    wait_for_gold >> [train_pet(), train_gas()]
+    # train_pet y train_gas corren en SERIE después de que Gold está listo: ambos
+    # escriben gold.fct_forecast, y serializarlos evita cualquier carrera sobre la tabla
+    # (el tracer ya hace delete-por-target + append idempotente).
+    wait_for_gold >> train_pet() >> train_gas()
 
 
 training_pipeline()

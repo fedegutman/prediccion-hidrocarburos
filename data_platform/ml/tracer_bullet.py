@@ -24,20 +24,26 @@ from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeRegressor
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 WAREHOUSE_DSN = os.getenv("WAREHOUSE_DSN", "postgresql://dwh:dwh@warehouse:5432/oilgas")
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 TARGET = os.getenv("TARGET", "prod_pet")
 
-# lag0 es la producción del mes actual — el baseline naive es predecir M+1 = M
-BASELINE_COL = f"{TARGET}_lag0"
+# producción del mes actual (baseline naive: predecir M+1 = M). El nombre difiere por
+# target en el feature store: petróleo -> prod_pet_lag0, gas -> prod_gas_m.
+BASELINE_COL = {"prod_pet": "prod_pet_lag0", "prod_gas": "prod_gas_m"}[TARGET]
+# target point-in-time (M+1) ya persistido por dbt en el feature store (sin leakage)
+TARGET_COL = f"target_{TARGET}_m1"
 MODEL_NAME = f"forecast_{TARGET}"
 
-# columnas que NO son features: índices y metadata
+# columnas que NO son features: índices, metadata y AMBOS targets. Excluir los targets
+# evita data leakage (el modelo vería la respuesta) y matchea el online store, que no
+# los expone.
 NON_FEATURES = {
     "pozo_sk", "idpozo", "tiempo_sk", "fecha_mes",
     "feature_set_version",
+    "target_prod_pet_m1", "target_prod_gas_m1",
 }
 
 
@@ -55,17 +61,16 @@ def build_pipeline(num_cols, cat_cols):
     return Pipeline([("pre", pre), ("model", DecisionTreeRegressor(max_depth=4, random_state=0))])
 
 
-def generate_target(df: pd.DataFrame, target_col: str) -> pd.DataFrame:
-    """Genera el target dinámicamente: M+1 = producción del mes siguiente.
+def select_target(df: pd.DataFrame) -> pd.DataFrame:
+    """Toma el target point-in-time (M+1) que el feature store ya persiste.
 
-    El target NO vive en el feature store (riesgo de data leakage y no disponible
-    en inferencia online). Se genera haciendo un shift(-1) temporal por pozo.
-
-    Filas sin target (último mes de cada pozo) se dropean — son nulos estructurales
-    inevitables del ventaneo, no pérdida de información real (ver ADR-025).
+    El target se calcula en dbt con lead() (point-in-time, sin data leakage) y se
+    materializa en la tabla offline como ``target_{target}_m1``. Acá solo lo mapeamos
+    a ``_target`` y dropeamos las filas sin target (último mes de cada pozo, nulo
+    estructural inevitable del ventaneo).
     """
     df = df.sort_values(["idpozo", "fecha_mes"]).copy()
-    df["_target"] = df.groupby("idpozo")[target_col].shift(-1)
+    df["_target"] = df[TARGET_COL]
     # dropear filas sin target (último mes por pozo no tiene M+1)
     df = df[df["_target"].notna()].copy()
     return df
@@ -80,8 +85,8 @@ def main():
     if df.empty:
         raise SystemExit("Feature store vacío (¿corriste el pipeline de datos?).")
 
-    # --- generar target dinámicamente en el pipeline de entrenamiento ---
-    df = generate_target(df, TARGET)
+    # --- target point-in-time desde el feature store (dbt, sin leakage) ---
+    df = select_target(df)
 
     # filas válidas: tienen baseline (producción del mes actual reportada)
     df = df[df[BASELINE_COL].notna()].copy()
@@ -119,7 +124,7 @@ def main():
             "n_train": len(tr),
             "n_valid": len(va),
             "n_features": len(feat_cols),
-            "target_generacion": "shift(-1) por pozo en pipeline (no en feature store)",
+            "target_origen": f"feature store dbt ({TARGET_COL}, point-in-time)",
         })
         mlflow.log_metrics({
             "mae": mae,
@@ -153,7 +158,25 @@ def main():
     out["target_kind"] = TARGET
     out["model_name"] = MODEL_NAME
     out["model_version"] = version
-    out.to_sql("fct_forecast", engine, schema="gold", if_exists="replace", index=False)
+
+    # escritura idempotente POR TARGET: crear la tabla si no existe, borrar solo las
+    # filas de ESTE target y reinsertar. Con if_exists="replace" cada corrida dropeaba
+    # la tabla entera, así que train_pet y train_gas se pisaban (sobrevivía un solo
+    # target). Con delete-por-target + append conviven ambos.
+    with engine.begin() as conn:
+        conn.execute(text("""
+            create table if not exists gold.fct_forecast (
+                idpozo          text,
+                fecha_mes_base  date,
+                fecha_mes_pred  date,
+                prediccion      double precision,
+                target_kind     text,
+                model_name      text,
+                model_version   text
+            )
+        """))
+        conn.execute(text("delete from gold.fct_forecast where target_kind = :t"), {"t": TARGET})
+    out.to_sql("fct_forecast", engine, schema="gold", if_exists="append", index=False)
 
     print(
         f"[tracer] target={TARGET} | MAE={mae:.1f} baseline={mae_base:.1f} "
