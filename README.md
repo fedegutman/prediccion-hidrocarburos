@@ -193,7 +193,7 @@ docker compose ps                   # esperar a que todo esté "healthy"
 4. La API sirve las predicciones: `GET /api/v1/forecast?...&target=prod_pet`.
 
 ### CI/CD de los pipelines de datos/ML
-Los pipelines se validan en CI (ver sección **CI/CD**): `dbt-tests` (build + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y del job de ML) y `pages` (publica el catálogo de gobierno a GitHub Pages). Decisiones clave de Fase 3: [ADR-022](adr/ADR-022-gate-calidad-promocion-gold.md) (gate de calidad de datos), [ADR-023](adr/ADR-023-metadata-tecnica-de-carga-bronze.md) (metadata de carga en Bronze), [ADR-024](adr/ADR-024-experiment-tracking-model-registry.md) (MLflow), [ADR-025](adr/ADR-025-feature-store.md) (feature store), [ADR-026](adr/ADR-026-serving-predicciones.md) (serving de predicciones), [ADR-027](adr/ADR-027-gate-validacion-modelo.md) (gate de validación del modelo) y [ADR-028](adr/ADR-028-cicd-pipelines-datos-ml.md) (CI/CD de los pipelines de datos/ML).
+Los pipelines se validan en CI (ver sección **CI/CD**): `dbt-tests` (build + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y del job de ML) y `pages` (publica el catálogo de gobierno a GitHub Pages). Decisiones clave de Fase 3: [ADR-022](adr/ADR-022-gate-calidad-promocion-gold.md) (gate de calidad de datos), [ADR-023](adr/ADR-023-metadata-tecnica-de-carga-bronze.md) (metadata de carga en Bronze), [ADR-024](adr/ADR-024-experiment-tracking-model-registry.md) (MLflow), [ADR-025](adr/ADR-025-feature-store.md) (feature store), [ADR-026](adr/ADR-026-serving-predicciones.md) (serving de predicciones), [ADR-027](adr/ADR-027-gate-validacion-modelo.md) (gate de validación del modelo) y [ADR-028](adr/ADR-028-cicd-pipelines-datos-ml.md) (CI/CD de los pipelines de datos/ML). Decisiones de modelado: [ADR-029](adr/ADR-029-estrategia-horizonte-pronostico.md) (estrategia de horizonte de pronóstico), [ADR-030](adr/ADR-030-ubicacion-target-feature-store.md) (ubicación del target en el feature store) y [ADR-031](adr/ADR-031-nulos-estructurales-cold-start.md) (nulos estructurales y cold-start).
 
 ## API
 
@@ -426,3 +426,6 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-026 | Serving de predicciones (scoring batch a `gold.fct_forecast`) |
 | ADR-027 | Gate de validación del modelo antes de promover a Production |
 | ADR-028 | CI/CD de los pipelines de datos/ML (validación en CI + ejecución local) |
+| ADR-029 | Estrategia de horizonte de pronóstico (single-step M+1 con cap) |
+| ADR-030 | Ubicación del target en el feature store (label en el offline) |
+| ADR-031 | Manejo de nulos estructurales y cold-start en features |
