@@ -193,7 +193,7 @@ docker compose ps                   # esperar a que todo esté "healthy"
 4. La API sirve las predicciones: `GET /api/v1/forecast?...&target=prod_pet`.
 
 ### CI/CD de los pipelines de datos/ML
-Los pipelines se validan en CI (ver sección **CI/CD**): `dbt-tests` (build + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y del job de ML) y `pages` (publica el catálogo de gobierno a GitHub Pages). Decisiones clave de Fase 3: [ADR-022](adr/ADR-022-gate-calidad-promocion-gold.md) (gate de calidad de datos), [ADR-023](adr/ADR-023-metadata-tecnica-de-carga-bronze.md) (metadata de carga en Bronze), [ADR-024](adr/ADR-024-experiment-tracking-model-registry.md) (MLflow), [ADR-025](adr/ADR-025-feature-store.md) (feature store), [ADR-026](adr/ADR-026-serving-predicciones.md) (serving de predicciones) y [ADR-027](adr/ADR-027-gate-validacion-modelo.md) (gate de validación del modelo).
+Los pipelines se validan en CI (ver sección **CI/CD**): `dbt-tests` (build + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y del job de ML) y `pages` (publica el catálogo de gobierno a GitHub Pages). Decisiones clave de Fase 3: [ADR-022](adr/ADR-022-gate-calidad-promocion-gold.md) (gate de calidad de datos), [ADR-023](adr/ADR-023-metadata-tecnica-de-carga-bronze.md) (metadata de carga en Bronze), [ADR-024](adr/ADR-024-experiment-tracking-model-registry.md) (MLflow), [ADR-025](adr/ADR-025-feature-store.md) (feature store), [ADR-026](adr/ADR-026-serving-predicciones.md) (serving de predicciones), [ADR-027](adr/ADR-027-gate-validacion-modelo.md) (gate de validación del modelo) y [ADR-028](adr/ADR-028-cicd-pipelines-datos-ml.md) (CI/CD de los pipelines de datos/ML).
 
 ## API
 
@@ -286,6 +286,10 @@ El pipeline está dividido en dos workflows de GitHub Actions:
 El deploy clona el repositorio en la instancia, inyecta las variables de entorno (`API_IMAGE`, `SLACK_WEBHOOK_URL`, `API_KEY`, `WAREHOUSE_DSN`), configura un **swapfile de 1 GB** (idempotente, por el RAM ajustado de la t2.micro — ver [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md)) y levanta el stack con `docker compose up -d`. Si el health check post-deploy falla, se restaura automáticamente la imagen anterior.
 
 Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
+
+### Pipelines de datos/ML (Fase 2/3)
+
+Los pipelines de procesamiento (Airflow + dbt + entrenamiento) pasan por CI en cada push/PR: `dbt-tests` (build Silver/Gold + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y el job de ML) y `pages` (publica el catálogo de gobierno). El build de imagen se **gatea** con estos jobs. El "despliegue" del pipeline es **IaC versionada**: se levanta reproduciblemente con `docker compose` desde el código en git (los DAGs se recargan solos). **No se despliega a un runtime cloud** por decisión de scope (la Fase 3 se entrega **sin servicio live** y se demuestra en local) y de costo/recursos. Rationale y alternativas en [ADR-028](adr/ADR-028-cicd-pipelines-datos-ml.md) y [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
 
 ### Secrets de GitHub Actions
 
@@ -421,3 +425,4 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-025 | Feature store (offline + online sobre Gold con dbt) |
 | ADR-026 | Serving de predicciones (scoring batch a `gold.fct_forecast`) |
 | ADR-027 | Gate de validación del modelo antes de promover a Production |
+| ADR-028 | CI/CD de los pipelines de datos/ML (validación en CI + ejecución local) |
