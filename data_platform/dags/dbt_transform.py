@@ -2,7 +2,7 @@
 
 En vez de un `dbt build` plano que materializa Gold en el schema vivo ANTES de testearlo
 (con lo cual un dato roto queda expuesto a la API/BI hasta la próxima corrida), la promoción
-es en cuatro pasos con gate de calidad real (ver ADR-032):
+es en cuatro pasos con gate de calidad real (ver ADR-022):
 
   1. build_silver        -> construye las vistas Silver y corre sus tests de calidad.
   2. build_gold_staging  -> materializa Gold en un schema STAGING (gold_staging), no en el vivo.
