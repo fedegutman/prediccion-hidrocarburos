@@ -1,7 +1,7 @@
 # ADR-030: Ubicación del target en el feature store (label en el offline, online sin label)
 
 **Fecha**: 2026-07-12
-**Estado**: Propuesto
+**Estado**: Aceptado
 
 ## Contexto
 

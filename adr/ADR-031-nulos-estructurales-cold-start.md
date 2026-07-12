@@ -1,7 +1,7 @@
 # ADR-031: Manejo de nulos estructurales y cold-start en features
 
 **Fecha**: 2026-07-12
-**Estado**: Propuesto
+**Estado**: Aceptado
 
 ## Contexto
 

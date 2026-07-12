@@ -1,7 +1,7 @@
 # ADR-029: Estrategia de horizonte de pronóstico (single-step M+1 con cap)
 
 **Fecha**: 2026-07-12
-**Estado**: Propuesto
+**Estado**: Aceptado
 
 ## Contexto
 
