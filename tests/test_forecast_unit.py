@@ -1,56 +1,76 @@
-"""Unit tests para la logica de generacion de pronosticos."""
+"""Unit tests para la lógica de lectura de pronósticos desde el warehouse.
+
+El endpoint de forecast dejó de generar datos mock: ahora lee las predicciones
+que el pipeline de ML persiste en ``gold.fct_forecast``. Estos tests ejercitan
+``_get_forecast_from_warehouse`` con ``app.db.run_query`` mockeado, sin necesidad
+de un Postgres vivo.
+"""
 
 from datetime import date
 
-from app.forecast.routes import _generate_forecast
+import pytest
+from fastapi import HTTPException
+
+from app import db
+from app.forecast.routes import _get_forecast_from_warehouse, _validate_api_key
 
 
-def test_generate_forecast_returns_correct_number_of_days() -> None:
-    """Verifica que se genera un punto por cada dia del rango."""
-    points = _generate_forecast("POZO-001", date(2024, 1, 1), date(2024, 1, 3))
-    assert len(points) == 3
+def _rows(*pairs):
+    """Arma filas con la forma que devuelve ``db.run_query`` para fct_forecast."""
+    return [{"fecha_mes_pred": d, "prediccion": p} for d, p in pairs]
 
 
-def test_generate_forecast_same_day_returns_one_point() -> None:
-    """Verifica que un rango de un solo dia retorna un punto."""
-    points = _generate_forecast("POZO-001", date(2024, 1, 1), date(2024, 1, 1))
-    assert len(points) == 1
+def test_forecast_maps_rows_to_points(monkeypatch) -> None:
+    """Cada fila del warehouse se mapea a un ForecastPoint con la predicción redondeada."""
+    monkeypatch.setattr(db, "run_query", lambda sql, params=None: _rows(
+        ("2024-01-01", 1234.567), ("2024-02-01", 1000.0),
+    ))
+    points = _get_forecast_from_warehouse("10001", date(2024, 1, 1), date(2024, 12, 31), "prod_pet")
+    assert len(points) == 2
+    assert points[0].date == "2024-01-01"
+    assert points[0].prod == 1234.57  # redondeado a 2 decimales
 
 
-def test_generate_forecast_production_decreases_over_time() -> None:
-    """Verifica que la produccion decrece con el tiempo."""
-    points = _generate_forecast("POZO-001", date(2024, 1, 1), date(2024, 1, 10))
-    assert points[0].prod > points[-1].prod
+def test_forecast_passes_target_and_pozo_to_query(monkeypatch) -> None:
+    """El pozo y el target recibidos se pasan como parámetros de la consulta (multi-target)."""
+    captured = {}
+
+    def fake_run_query(sql, params=None):
+        captured.update(params or {})
+        return _rows(("2024-01-01", 10.0))
+
+    monkeypatch.setattr(db, "run_query", fake_run_query)
+    _get_forecast_from_warehouse("10001", date(2024, 1, 1), date(2024, 12, 31), "prod_gas")
+    assert captured["target"] == "prod_gas"
+    assert captured["idpozo"] == "10001"
 
 
-def test_generate_forecast_production_never_negative() -> None:
-    """Verifica que la produccion nunca es negativa aunque el rango sea muy largo."""
-    points = _generate_forecast("POZO-001", date(2024, 1, 1), date(2030, 1, 1))
-    assert all(p.prod >= 0.0 for p in points)
+def test_forecast_no_rows_raises_404(monkeypatch) -> None:
+    """Sin predicciones para el pozo/rango, lanza 404."""
+    monkeypatch.setattr(db, "run_query", lambda sql, params=None: [])
+    with pytest.raises(HTTPException) as exc:
+        _get_forecast_from_warehouse("99999", date(2024, 1, 1), date(2024, 12, 31), "prod_pet")
+    assert exc.value.status_code == 404
 
 
-def test_generate_forecast_dates_are_sequential() -> None:
-    """Verifica que las fechas de los puntos son consecutivas."""
-    points = _generate_forecast("POZO-001", date(2024, 1, 1), date(2024, 1, 5))
-    for i in range(1, len(points)):
-        prev = date.fromisoformat(points[i - 1].date)
-        curr = date.fromisoformat(points[i].date)
-        assert (curr - prev).days == 1
+def test_forecast_db_error_raises_503(monkeypatch) -> None:
+    """Si el warehouse no está disponible, lanza 503."""
+    def boom(sql, params=None):
+        raise RuntimeError("warehouse caído")
+
+    monkeypatch.setattr(db, "run_query", boom)
+    with pytest.raises(HTTPException) as exc:
+        _get_forecast_from_warehouse("10001", date(2024, 1, 1), date(2024, 12, 31), "prod_pet")
+    assert exc.value.status_code == 503
 
 
-def test_generate_forecast_first_date_matches_start() -> None:
-    """Verifica que el primer punto corresponde a date_start."""
-    points = _generate_forecast("POZO-001", date(2024, 3, 15), date(2024, 3, 17))
-    assert points[0].date == "2024-03-15"
+def test_validate_api_key_ok() -> None:
+    """La API key correcta (seteada en conftest) no lanza excepción."""
+    _validate_api_key("test-api-key")
 
 
-def test_generate_forecast_last_date_matches_end() -> None:
-    """Verifica que el ultimo punto corresponde a date_end."""
-    points = _generate_forecast("POZO-001", date(2024, 3, 15), date(2024, 3, 17))
-    assert points[-1].date == "2024-03-17"
-
-
-def test_generate_forecast_unknown_well_uses_default_production() -> None:
-    """Verifica que un pozo desconocido usa produccion base por defecto (100.0)."""
-    points = _generate_forecast("POZO-INEXISTENTE", date(2024, 1, 1), date(2024, 1, 1))
-    assert points[0].prod == 100.0
+def test_validate_api_key_invalid_raises_403() -> None:
+    """Una API key incorrecta lanza 403."""
+    with pytest.raises(HTTPException) as exc:
+        _validate_api_key("clave-incorrecta")
+    assert exc.value.status_code == 403
