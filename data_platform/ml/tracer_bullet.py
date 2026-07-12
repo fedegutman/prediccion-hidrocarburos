@@ -29,6 +29,10 @@ from sqlalchemy import create_engine, text
 WAREHOUSE_DSN = os.getenv("WAREHOUSE_DSN", "postgresql://dwh:dwh@warehouse:5432/oilgas")
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 TARGET = os.getenv("TARGET", "prod_pet")
+# umbral del gate de validación: skill mínimo para promover el modelo a Production.
+# Default LENIENTE porque el tracer bullet todavía no supera al baseline (ver ADR-027);
+# se sube a 0.0 cuando aterrice el modelo real (WS5).
+MIN_SKILL = float(os.getenv("MIN_SKILL", "-1.0"))
 
 # producción del mes actual (baseline naive: predecir M+1 = M). El nombre difiere por
 # target en el feature store: petróleo -> prod_pet_lag0, gas -> prod_gas_m.
@@ -114,6 +118,11 @@ def main():
     mae_base = mean_absolute_error(va["_target"], va[BASELINE_COL])
     skill = 1 - mae / mae_base if mae_base else 0.0
 
+    # gate de validación: el skill compara contra el baseline naive (predecir M+1 = M);
+    # skill >= 0 => el modelo es al menos tan bueno como el baseline. Se promueve solo si
+    # supera MIN_SKILL (ver ADR-027).
+    passed = skill >= MIN_SKILL
+
     # --- MLflow: tracking + registry ---
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_experiment("oilgas-forecast")
@@ -125,6 +134,7 @@ def main():
             "n_valid": len(va),
             "n_features": len(feat_cols),
             "target_origen": f"feature store dbt ({TARGET_COL}, point-in-time)",
+            "min_skill": MIN_SKILL,
         })
         mlflow.log_metrics({
             "mae": mae,
@@ -132,6 +142,7 @@ def main():
             "mae_baseline": mae_base,
             "skill_score": skill,
         })
+        mlflow.set_tag("validation_passed", passed)
         mlflow.sklearn.log_model(
             pipe,
             artifact_path="model",
@@ -139,9 +150,21 @@ def main():
         )
         run_id = run.info.run_id
 
-    # registrar la versión y marcarla Production
+    # registrar la versión (queda trackeado TODO candidato, pase o no) y taggear si validó
     client = MlflowClient(tracking_uri=TRACKING_URI)
     version = mlflow.register_model(f"runs:/{run_id}/model", MODEL_NAME).version
+    client.set_model_version_tag(MODEL_NAME, version, "validation_passed", str(passed))
+
+    # gate: solo se promueve a Production (y se reescriben las predicciones) si validó.
+    # Si no valida, se mantiene el Production anterior (last-good) intacto y el task falla
+    # para que quede visible en Airflow — nunca se sirve un modelo que no pasó validación.
+    if not passed:
+        raise SystemExit(
+            f"[gate] {MODEL_NAME} v{version} NO supera la validacion "
+            f"(skill={skill:.3f} < MIN_SKILL={MIN_SKILL}); no se promueve a Production "
+            f"ni se reescribe fct_forecast. Queda el modelo Production anterior."
+        )
+
     client.set_registered_model_alias(MODEL_NAME, "Production", version)
 
     # --- inferencia: predecir M+1 desde el online store y escribir gold.fct_forecast ---
