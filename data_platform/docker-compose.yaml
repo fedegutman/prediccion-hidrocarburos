@@ -37,6 +37,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/dbt:/opt/airflow/dbt      # --- agregado: el proyecto dbt ---
+    - ${AIRFLOW_PROJ_DIR:-.}/ml:/opt/airflow/ml
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -358,7 +359,45 @@ services:
       - warehouse
     restart: unless-stopped
 
+  # --- AGREGADO (Fase 3): MLflow = Experiment Tracking + Model Registry. ---
+  # Backend (metadatos de runs/modelos) = base `mlflow` en el Postgres del warehouse (separada de oilgas).
+  # Artifact store = volumen Docker LOCAL (no S3 → corre en cualquier máquina sin credenciales AWS). Ver ADR-024.
+  mlflow:
+    build: ./mlflow
+    ports:
+      - "5500:5000"        # UI/API de MLflow → http://localhost:5500 (host 5500 evita el conflicto de AirPlay con 5000 en macOS)
+    environment:
+      MLFLOW_DB_HOST: warehouse
+      MLFLOW_DB_PORT: "5432"
+      MLFLOW_DB_USER: dwh
+      MLFLOW_DB_PASSWORD: dwh
+      MLFLOW_DB_NAME: mlflow
+      MLFLOW_ARTIFACTS: /mlflow/artifacts
+    volumes:
+      - mlflow-artifacts:/mlflow/artifacts
+    depends_on:
+      warehouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # --- AGREGADO (Fase 3): tracer bullet ML (circuito e2e con modelo trivial). ---
+  # No arranca con `up -d` (profile "ml"); se corre a demanda:
+  #   docker compose --profile ml run --rm ml-tracer
+  # Lee el feature store, entrena, registra en MLflow y escribe gold.fct_forecast. Ver WS4.
+  ml-tracer:
+    build: ./ml
+    profiles: ["ml"]
+    environment:
+      WAREHOUSE_DSN: postgresql://dwh:dwh@warehouse:5432/oilgas
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      TARGET: prod_pet        # 'prod_pet' o 'prod_gas' (multi-target)
+    depends_on:
+      - warehouse
+      - mlflow
+    restart: "no"
+
 volumes:
   postgres-db-volume:
   warehouse-db-volume:       # --- agregado: datos del warehouse ---
   metabase-data:             # --- agregado: config/dashboards de Metabase ---
+  mlflow-artifacts:          # --- agregado: artifact store local de MLflow (Fase 3) ---

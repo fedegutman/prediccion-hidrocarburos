@@ -2,7 +2,11 @@
 
 Trabajo Integrador — Ingeniería de Software 2026.
 
-Sistema para pronosticar producción de hidrocarburos por pozo. Fase 1: servicio mock con API REST, monitoreo y alertas.
+Sistema para pronosticar producción de hidrocarburos por pozo, construido en tres fases:
+
+- **Fase 1** — API REST (FastAPI) + stack de monitoreo (Prometheus/Grafana/Alertmanager) y CI/CD a AWS EC2.
+- **Fase 2** — plataforma de datos: Airflow + data warehouse Postgres + dbt, arquitectura medallion (bronze/silver/gold).
+- **Fase 3** — circuito de ML de punta a punta sobre `gold`: feature store + MLflow (tracking y model registry) + entrenamiento recurrente y automático, cuyas predicciones sirve la API.
 
 ## Ambientes
 
@@ -26,6 +30,7 @@ Documentación interactiva (Swagger): `<host>:8000/docs`
 | Alertmanager | 9093 | Routing de alertas a Slack |
 | node-exporter | 9100 | Métricas del host |
 | warehouse | interno | Postgres — data warehouse (capa gold) que sirve la API en prod |
+| MLflow | 5500 | Experiment tracking + model registry (stack de datos `data_platform/`, corre local) |
 
 ## Requisitos (ejecución local)
 
@@ -56,6 +61,69 @@ datos.gob.ar ─(Airflow: bronze_ingesta)─▶ bronze ─(dbt)─▶ silver ─
 
 > **En producción:** corren la **API** + un **warehouse `gold` colocado** en la EC2. El pipeline (Airflow + dbt) y el **BI (Metabase)** corren **en local** (se demuestran en el video). Topología y alternativas en [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
 
+### Modelo estrella (Gold)
+
+El diagrama de arriba es el **flujo** medallion; el **modelo estrella** de la capa `gold` (ERD) es el siguiente. Cardinalidad `||--o{` = una dimensión, muchas filas de hechos; las surrogate keys de la fact se recalculan con la misma fórmula que la dimensión (`md5(...)` / `AAAAMM`). Detalle y decisiones en [ADR-017](adr/ADR-017-modelo-dimensional.md).
+
+```mermaid
+erDiagram
+    DIM_POZO    ||--o{ FCT_PRODUCCION : pozo_sk
+    DIM_EMPRESA ||--o{ FCT_PRODUCCION : empresa_sk
+    DIM_AREA    ||--o{ FCT_PRODUCCION : area_sk
+    DIM_TIEMPO  ||--o{ FCT_PRODUCCION : tiempo_sk
+
+    FCT_PRODUCCION {
+        text   pozo_sk    FK "md5(idpozo)"
+        text   empresa_sk FK "md5(id_empresa)"
+        text   area_sk    FK "md5(area|cuenca|prov)"
+        int    tiempo_sk  FK "AAAAMM"
+        bigint idpozo     "grano"
+        int    anio       "grano"
+        int    mes        "grano"
+        date   fecha_mes
+        float  prod_pet   "medida"
+        float  prod_gas   "medida"
+        float  prod_agua  "medida"
+        float  iny_agua   "medida"
+        float  iny_gas    "medida"
+        float  iny_co2    "medida"
+        float  iny_otro   "medida"
+        float  tef        "medida"
+    }
+    DIM_POZO {
+        text   pozo_sk PK "md5(idpozo)"
+        bigint idpozo
+        text   sigla
+        text   formacion_productiva
+        text   area_yacimiento
+        text   cuenca
+        text   provincia
+        text   tipo_reservorio
+        float  coordenadax
+        float  coordenaday
+        float  cota
+        float  profundidad
+    }
+    DIM_EMPRESA {
+        text empresa_sk PK "md5(id_empresa)"
+        text id_empresa
+        text empresa
+    }
+    DIM_AREA {
+        text area_sk PK "md5(area|cuenca|prov)"
+        text area_yacimiento
+        text cuenca
+        text provincia
+    }
+    DIM_TIEMPO {
+        int  tiempo_sk PK "AAAAMM"
+        date fecha_mes
+        int  anio
+        int  mes
+        int  trimestre
+    }
+```
+
 ### Levantar la plataforma de datos (local)
 ```bash
 cd data_platform
@@ -82,18 +150,65 @@ Decisión y alternativas (DataHub) en [ADR-020](adr/ADR-020-gobierno-de-datos.md
 ### Reprocesamiento / backfill
 Procedimiento documentado y verificable en [docs/runbooks/data-engineer.md](docs/runbooks/data-engineer.md). La carga es **idempotente**: re-correr un período no duplica.
 
+## Plataforma de ML (Fase 3)
+
+Sobre la capa `gold` se monta un circuito de ML de punta a punta que cierra el flujo de la adenda (**Data Warehouse → Pre-proc/Training/Validation → Model Registry → API**), con orquestación (Airflow) y experiment tracking (MLflow):
+
+```
+gold (estrella)
+   │  (dbt)
+   ▼
+Feature Store          offline  feat_produccion_offline  (con targets)  ─▶ entrenamiento
+(dbt sobre gold)       online   feat_produccion_online   (sin targets)  ─┐ (scoring)
+                                                                          │
+Airflow  training_pipeline (@monthly)                                     │
+   ├─ entrena modelo simple (petróleo + gas)                              │
+   ├─ registra en MLflow  (tracking + model registry) ◀── Devs (ML Eng)   │
+   └─ scoring batch sobre el online store ──▶ gold.fct_forecast ◀─────────┘
+                                                    │
+                                                    ▼
+                                   API REST  GET /api/v1/forecast  ─▶ Usuarios
+```
+
+- **Feature store (dbt sobre gold)** → **RNF-1**. Las features quedan persistidas en dos tablas:
+  - `feat_produccion_offline` — panel histórico (una fila por pozo × mes) **con los targets** (`target_prod_pet_m1`, `target_prod_gas_m1`), usado para entrenar.
+  - `feat_produccion_online` — última fila por pozo **sin target**, usado para inferencia.
+  - **Multi-target** (petróleo y gas) y **point-in-time / sin data leakage**: los lags miran solo hacia atrás y las medias móviles **excluyen el mes actual** (`rows between N preceding and 1 preceding`); los targets son el valor del mes siguiente (`lead`). Hay tests dbt que hacen cumplir la ausencia de leakage (`assert_feat_no_leakage_lag`, `assert_feat_ma_excludes_current`, `assert_feat_target_pointintime`).
+- **Experiment tracking + model registry (MLflow)** → **RF-2**. Servicio propio en el `docker-compose` de la plataforma (corre local): UI en http://localhost:5500, *backend store* en Postgres y *artifact store* en un volumen Docker (sin dependencias de nube). Cada corrida loguea params y métricas, y los modelos se registran como `forecast_prod_pet` y `forecast_prod_gas` con alias `Production`. Ver [ADR-024](adr/ADR-024-experiment-tracking-model-registry.md).
+- **Entrenamiento recurrente y automático (Airflow)**. El DAG `training_pipeline` corre `@monthly` y entrena ambos targets en paralelo con un modelo simple (`DecisionTreeRegressor`), los registra en MLflow y hace **scoring batch** sobre el online store, persistiendo las predicciones en `gold.fct_forecast`. El entrenamiento se puede repetir **para un día dado** (retrain) volviéndolo a triggerear desde Airflow.
+- **API de predicciones**. `GET /api/v1/forecast` lee las predicciones de `gold.fct_forecast` por pozo, target y rango (ver sección **API**).
+
+> **Encadenamiento de DAGs:** `bronze_ingesta → dbt_transform → training_pipeline` están acoplados por `ExternalTaskSensor` (no por trigger directo) y los tres corren `@monthly`. Para que el circuito se encadene de punta a punta, los tres deben ejecutarse con la **misma fecha lógica** (`logical_date`).
+
+### Correr el circuito de ML (local)
+```bash
+cd data_platform
+docker compose up airflow-init      # una sola vez
+docker compose up -d                # warehouse + Airflow + dbt + MLflow + Metabase
+docker compose ps                   # esperar a que todo esté "healthy"
+```
+1. **Airflow** (http://localhost:8080, `airflow`/`airflow`): activar y triggerear `bronze_ingesta` con config `{"date_from": "2023-01-01", "date_to": "2024-12-31"}`.
+2. Al terminar, `dbt_transform` construye Silver/Gold + feature store con el gate de calidad; luego `training_pipeline` entrena y escribe `gold.fct_forecast`.
+3. **MLflow** (http://localhost:5500): en *Models* deben aparecer `forecast_prod_pet` y `forecast_prod_gas`; en *Experiments*, las métricas de cada run.
+4. La API sirve las predicciones: `GET /api/v1/forecast?...&target=prod_pet`.
+
+### CI/CD de los pipelines de datos/ML
+Los pipelines se validan en CI (ver sección **CI/CD**): `dbt-tests` (build + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y del job de ML) y `pages` (publica el catálogo de gobierno a GitHub Pages). Decisiones clave de Fase 3: [ADR-022](adr/ADR-022-gate-calidad-promocion-gold.md) (gate de calidad de datos), [ADR-023](adr/ADR-023-metadata-tecnica-de-carga-bronze.md) (metadata de carga en Bronze), [ADR-024](adr/ADR-024-experiment-tracking-model-registry.md) (MLflow), [ADR-025](adr/ADR-025-feature-store.md) (feature store), [ADR-026](adr/ADR-026-serving-predicciones.md) (serving de predicciones), [ADR-027](adr/ADR-027-gate-validacion-modelo.md) (gate de validación del modelo) y [ADR-028](adr/ADR-028-cicd-pipelines-datos-ml.md) (CI/CD de los pipelines de datos/ML). Decisiones de modelado: [ADR-029](adr/ADR-029-estrategia-horizonte-pronostico.md) (estrategia de horizonte de pronóstico), [ADR-030](adr/ADR-030-ubicacion-target-feature-store.md) (ubicación del target en el feature store) y [ADR-031](adr/ADR-031-nulos-estructurales-cold-start.md) (nulos estructurales y cold-start).
+
 ## API
 
 Autenticación: header `X-API-Key`. El valor se configura con la env var `API_KEY` (ver sección **Configuración**); **no hay default** — si no está seteada, la API responde 503.
 
 ### Endpoints
 
-**GET /api/v1/forecast**
+**GET /api/v1/forecast** — predicciones del modelo ML (capa gold, `fct_forecast`)
 ```
-Params: id_well (string), date_start (YYYY-MM-DD), date_end (YYYY-MM-DD)
-Response 200: { "id_well": "POZO-001", "data": [{ "date": "...", "prod": 150.5 }] }
-Response 403: API key inválida
-Response 400: date_end < date_start
+Params: id_well (idpozo), date_start (YYYY-MM-DD), date_end (YYYY-MM-DD),
+        target (prod_pet | prod_gas, def. prod_pet)
+Response 200: { "id_well": "10001", "target": "prod_pet",
+                "data": [{ "date": "2024-01-01", "prod": 150.5 }] }
+Response 403: API key inválida | 400: date_end < date_start
+Response 404: sin predicciones para el pozo/rango | 503: warehouse no disponible
 ```
 
 **GET /api/v1/wells** _(deprecado — usar `/api/v1/pozos`)_
@@ -172,6 +287,10 @@ El deploy clona el repositorio en la instancia, inyecta las variables de entorno
 
 Las imágenes se almacenan en **Amazon ECR**. La autenticación de GitHub Actions con AWS se realiza via **OIDC** (sin credenciales estáticas), con roles IAM separados para CI (`GithubCIRole`) y CD (`InstanceCDRole`).
 
+### Pipelines de datos/ML (Fase 2/3)
+
+Los pipelines de procesamiento (Airflow + dbt + entrenamiento) pasan por CI en cada push/PR: `dbt-tests` (build Silver/Gold + tests de calidad), `dbt-tests-red` (verifica que datos rotos **fallan** el gate), `ml-lint` (ruff + `py_compile` del training DAG y el job de ML) y `pages` (publica el catálogo de gobierno). El build de imagen se **gatea** con estos jobs. El "despliegue" del pipeline es **IaC versionada**: se levanta reproduciblemente con `docker compose` desde el código en git (los DAGs se recargan solos). **No se despliega a un runtime cloud** por decisión de scope (la Fase 3 se entrega **sin servicio live** y se demuestra en local) y de costo/recursos. Rationale y alternativas en [ADR-028](adr/ADR-028-cicd-pipelines-datos-ml.md) y [ADR-021](adr/ADR-021-topologia-warehouse-produccion.md).
+
 ### Secrets de GitHub Actions
 
 El pipeline requiere estos secrets (Settings → Secrets and variables → Actions). Los dos ARN salen de la infraestructura (`infra/terraform`, ver `terraform output`).
@@ -241,9 +360,11 @@ Cobertura actual: 100%
 │   ├── db.py                  # acceso read-only al warehouse
 │   ├── metrics/
 │   └── limiter.py
-├── data_platform/             # plataforma de datos (Fase 2)
-│   ├── dags/                  # DAGs de Airflow (bronze_ingesta, dbt_transform)
-│   ├── dbt/oilgas/            # modelos dbt (silver/gold) + tests + dbt docs
+├── data_platform/             # plataforma de datos (Fase 2) + ML (Fase 3)
+│   ├── dags/                  # DAGs de Airflow (bronze_ingesta, dbt_transform, training_pipeline)
+│   ├── dbt/oilgas/            # modelos dbt (silver/gold + feature store) + tests + dbt docs
+│   ├── ml/                    # entrenamiento + scoring batch (tracer_bullet.py)
+│   ├── mlflow/                # servicio MLflow (tracking + model registry)
 │   ├── metabase/              # setup del BI
 │   └── docker-compose.yaml
 ├── docs/runbooks/             # runbooks por rol (data-engineer, data-analyst)
@@ -298,3 +419,13 @@ Las decisiones de arquitectura están documentadas en `/adr`:
 | ADR-019 | Estrategia de calidad de datos (dbt tests + store_failures + gate) |
 | ADR-020 | Plataforma de gobierno y linaje (dbt docs + Airflow vs DataHub) |
 | ADR-021 | Topología del warehouse en producción (contenedor colocado en EC2) |
+| ADR-022 | Gate de calidad en la promoción a Gold (Write-Audit-Publish) |
+| ADR-023 | Metadata técnica de carga por registro en Bronze |
+| ADR-024 | Experiment tracking y model registry (MLflow) |
+| ADR-025 | Feature store (offline + online sobre Gold con dbt) |
+| ADR-026 | Serving de predicciones (scoring batch a `gold.fct_forecast`) |
+| ADR-027 | Gate de validación del modelo antes de promover a Production |
+| ADR-028 | CI/CD de los pipelines de datos/ML (validación en CI + ejecución local) |
+| ADR-029 | Estrategia de horizonte de pronóstico (single-step M+1 con cap) |
+| ADR-030 | Ubicación del target en el feature store (label en el offline) |
+| ADR-031 | Manejo de nulos estructurales y cold-start en features |

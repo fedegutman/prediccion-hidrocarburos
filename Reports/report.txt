@@ -4,7 +4,7 @@ Report Summary
 ┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
 │                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ 782818417617.dkr.ecr.us-east-2.amazonaws.com/api:main (debian 13.5)              │   debian   │        0        │    -    │
+│ 782818417617.dkr.ecr.us-east-2.amazonaws.com/api:develop (debian 13.5)           │   debian   │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/annotated_doc-0.0.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
@@ -14,15 +14,15 @@ Report Summary
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/backports_zstd-1.6.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/build-1.5.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/build-1.5.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/cachecontrol-0.14.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/METADATA      │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/cffi-2.0.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/cffi-2.1.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/charset_normalizer-3.4.9.dist-info/METAD- │ python-pkg │        0        │    -    │
 │ ATA                                                                              │            │                 │         │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/cleo-2.1.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
@@ -37,13 +37,13 @@ Report Summary
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/distlib-0.4.3.dist-info/METADATA          │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/dulwich-1.2.6.dist-info/METADATA          │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/dulwich-1.2.10.dist-info/METADATA         │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/fastapi-0.135.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/fastjsonschema-2.21.2.dist-info/METADATA  │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/filelock-3.29.4.dist-info/METADATA        │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/filelock-3.29.7.dist-info/METADATA        │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/findpython-0.8.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
@@ -95,6 +95,8 @@ Report Summary
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/psycopg_binary-3.3.4.dist-info/METADATA   │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/psycopg_pool-3.3.1.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/pycparser-3.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/pydantic-2.13.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
@@ -103,7 +105,7 @@ Report Summary
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/pyproject_hooks-1.2.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/python_discovery-1.4.2.dist-info/METADATA │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/python_discovery-1.4.4.dist-info/METADATA │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/rapidfuzz-3.14.5.dist-info/METADATA       │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
@@ -135,7 +137,7 @@ Report Summary
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/uvicorn-0.44.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
-│ usr/local/lib/python3.12/site-packages/virtualenv-21.5.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+│ usr/local/lib/python3.12/site-packages/virtualenv-21.6.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
 ├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
 │ usr/local/lib/python3.12/site-packages/wrapt-2.1.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
 └──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘

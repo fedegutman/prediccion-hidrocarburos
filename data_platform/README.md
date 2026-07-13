@@ -15,6 +15,7 @@ con **arquitectura medallion** (Bronze → Silver → Gold) y consumo por **API 
 | Transformación | dbt 1.8 (adapter postgres) | Construye Silver/Gold y corre los tests de calidad |
 | BI | Metabase | Dashboards para usuarios no técnicos (sobre `gold`) |
 | Gobierno / linaje | dbt docs + Airflow UI | Catálogo, linaje a nivel tabla, workflows y última actualización |
+| Experiment tracking + model registry | MLflow | Tracking de runs de entrenamiento (RF-2/RF-3) y registro de modelos versionados (Fase 3, ver ADR-024) |
 
 Las tres capas medallion (schemas del warehouse):
 
@@ -25,20 +26,22 @@ Las tres capas medallion (schemas del warehouse):
 | `gold` | Modelo estrella `fct_produccion` + `dim_pozo/empresa/area/tiempo` (tablas) |
 | `dq_failures` | Filas que fallan un test de calidad (persistidas, ver ADR-019) |
 
+> **Diagrama del esquema estrella (ERD):** ver [ADR-017](../adr/ADR-017-modelo-dimensional.md#diagrama-del-esquema-estrella) o el [README raíz](../README.md#modelo-estrella-gold).
+
 > ℹ️ Hay **dos Postgres**: `postgres` es la base interna de Airflow (metadatos); `warehouse` es el data
 > warehouse del proyecto. Separados a propósito.
 
 ## Requisitos
 
 - Docker y Docker Compose
-- ~6 GB de RAM libres para Docker (Airflow + warehouse + Metabase + dbt docs)
+- ~6-7 GB de RAM libres para Docker (Airflow + warehouse + Metabase + dbt docs + MLflow)
 
 ## Levantar el stack
 
 ```bash
 cd data_platform
-docker compose up airflow-init     # setup inicial (una sola vez)
-docker compose up -d               # Airflow + warehouse + Metabase + dbt docs
+docker compose up airflow-init        # setup inicial (una sola vez)
+docker compose up -d --build          # Airflow + warehouse + Metabase + dbt docs + MLflow (--build construye la imagen de MLflow)
 docker compose ps                  # esperar a que estén "healthy"
 docker compose down                # apagar (mantiene los datos); -v para borrarlos
 ```
@@ -53,6 +56,7 @@ La primera vez tarda varios minutos: descarga imágenes e instala dbt dentro de 
 | Airflow (orquestación + workflows) | http://localhost:8080 | `airflow` / `airflow` |
 | Metabase (BI) | http://localhost:3001 | `admin@oilgas.com` / `Admin1234!` |
 | dbt docs (catálogo + linaje) | http://localhost:8082 | — |
+| MLflow (tracking + model registry) | http://localhost:5500 | — |
 | Warehouse (Postgres) | `localhost:5433`, db `oilgas` | `dwh` / `dwh` |
 
 ## Correr el pipeline
@@ -91,6 +95,16 @@ estructural roto **bloquea el deploy** vía el job `dbt-tests` del CI.
 - **BI** → **Metabase** (`http://localhost:3001`): dashboard "Producción de Hidrocarburos" (por mes, por empresa,
   por cuenca), autoconfigurado por el servicio `metabase-init` contra el schema `gold`.
 
+## ML (Fase 3): tracking y tracer bullet
+
+- **MLflow** (experiment tracking + model registry) corre como servicio del stack → `http://localhost:5500` (ver ADR-024).
+- **Tracer bullet** (`data_platform/ml/`): valida el circuito ML de punta a punta con un modelo trivial — entrena desde el feature store, registra el modelo en MLflow y escribe predicciones en `gold.fct_forecast`. Se corre a demanda:
+  ```bash
+  docker compose --profile ml run --rm ml-tracer                      # target petróleo (default)
+  docker compose --profile ml run --rm -e TARGET=prod_gas ml-tracer   # target gas
+  ```
+  Deja una corrida en MLflow (con MAE / skill score), un modelo en `Production` y la tabla `gold.fct_forecast`. El modelo real, la validación walk-forward y la orquestación son WS5/WS6.
+
 ## Actualizar los workflows (DAGs)
 
 Los DAGs son archivos Python en `dags/`. Al guardarlos, el `dag-processor` de Airflow los detecta
@@ -126,5 +140,6 @@ no se despliegan a la nube por el límite de RAM de las instancias t2.micro.
 ## Decisiones (ADRs)
 
 `014` orquestación · `015` medallion · `016` tipo de carga · `017` modelo dimensional ·
-`018` API sobre Gold · `019` calidad · `020` gobierno · `021` topología del warehouse en prod.
+`018` API sobre Gold · `019` calidad · `020` gobierno · `021` topología del warehouse en prod ·
+`022` gate de calidad (WAP) · `023` metadata de carga en Bronze · `024` MLflow (tracking + registry).
 Todos en [`../adr/`](../adr/), con comparación de alternativas.

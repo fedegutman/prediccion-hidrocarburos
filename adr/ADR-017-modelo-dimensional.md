@@ -28,6 +28,69 @@ Se adopta un **esquema estrella** en el schema `gold`:
 
 **Cobertura de claves**: `dim_pozo` se construye desde la *unión* de los pozos de producción y del maestro, para que ningún registro de la fact quede sin dimensión.
 
+### Diagrama del esquema estrella
+
+Cardinalidad `||--o{` = una dimensión, muchas filas de hechos. Las surrogate keys de la fact se **recalculan** con la misma fórmula que la dimensión (`md5(...)` / `AAAAMM`), así el join estrella matchea sin lookups. Fuente: `data_platform/dbt/oilgas/models/gold/*.sql`.
+
+```mermaid
+erDiagram
+    DIM_POZO    ||--o{ FCT_PRODUCCION : pozo_sk
+    DIM_EMPRESA ||--o{ FCT_PRODUCCION : empresa_sk
+    DIM_AREA    ||--o{ FCT_PRODUCCION : area_sk
+    DIM_TIEMPO  ||--o{ FCT_PRODUCCION : tiempo_sk
+
+    FCT_PRODUCCION {
+        text   pozo_sk    FK "md5(idpozo)"
+        text   empresa_sk FK "md5(id_empresa)"
+        text   area_sk    FK "md5(area|cuenca|prov)"
+        int    tiempo_sk  FK "AAAAMM"
+        bigint idpozo     "grano"
+        int    anio       "grano"
+        int    mes        "grano"
+        date   fecha_mes
+        float  prod_pet   "medida"
+        float  prod_gas   "medida"
+        float  prod_agua  "medida"
+        float  iny_agua   "medida"
+        float  iny_gas    "medida"
+        float  iny_co2    "medida"
+        float  iny_otro   "medida"
+        float  tef        "medida"
+    }
+    DIM_POZO {
+        text   pozo_sk PK "md5(idpozo)"
+        bigint idpozo
+        text   sigla
+        text   formacion_productiva
+        text   area_yacimiento
+        text   cuenca
+        text   provincia
+        text   tipo_reservorio
+        float  coordenadax
+        float  coordenaday
+        float  cota
+        float  profundidad
+    }
+    DIM_EMPRESA {
+        text empresa_sk PK "md5(id_empresa)"
+        text id_empresa
+        text empresa
+    }
+    DIM_AREA {
+        text area_sk PK "md5(area|cuenca|prov)"
+        text area_yacimiento
+        text cuenca
+        text provincia
+    }
+    DIM_TIEMPO {
+        int  tiempo_sk PK "AAAAMM"
+        date fecha_mes
+        int  anio
+        int  mes
+        int  trimestre
+    }
+```
+
 ## Consecuencias
 
 **Pros:**

@@ -1,13 +1,27 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app import db
 from app.forecast.routes import router as forecast_router
 from app.limiter import limiter
 from app.metrics.system import MetricsMiddleware, metrics_app
 from app.pozos.routes import router as pozos_router
 from app.produccion.routes import router as produccion_router
 from app.wells.routes import router as wells_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Abre el pool de conexiones al warehouse al arrancar y lo cierra al apagar."""
+    db.init_pool()
+    try:
+        yield
+    finally:
+        db.close_pool()
+
 
 app = FastAPI(
     title="Oil & Gas Forecast API",
@@ -16,6 +30,7 @@ app = FastAPI(
         "API REST para consultar producción y pozos reales del data warehouse "
         "(capa gold), además del pronóstico de producción."
     ),
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
